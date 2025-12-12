@@ -1,0 +1,39 @@
+# Dependencies
+/node_modules
+
+# Build output
+/dist
+
+# Coverage
+/coverage
+
+# Bundle analysis
+/stats
+
+# Environment
+.env
+.env.backup
+.env.production
+.env.local
+env.json
+
+# Logs
+npm-debug.log
+yarn-error.log
+*.log
+
+# IDE
+/.idea
+/.vscode
+/.zed
+/.claude
+/.junie
+.phpactor.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Package manager locks (use package-lock.json)
+yarn.lock
+pnpm-lock.yaml

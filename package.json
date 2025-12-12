@@ -1,17 +1,26 @@
 {
-  "name": "curl-mcp-server",
+  "name": "mcp-curl",
   "version": "1.0.0",
   "description": "MCP server for executing cURL commands",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "curl-mcp-server": "./dist/index.js"
+    "curl-mcp": "./dist/index.js"
   },
   "files": [
     "dist"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sixees/mcp-curl.git"
+  },
+  "homepage": "https://github.com/sixees/mcp-curl#readme",
+  "bugs": {
+    "url": "https://github.com/sixees/mcp-curl/issues"
+  },
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsc --watch"
   },

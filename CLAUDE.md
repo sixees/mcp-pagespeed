@@ -44,7 +44,7 @@ The HTTP transport uses proper session management:
 
 - Only structured `curl_execute` (no arbitrary command execution)
 - Commands executed via `spawn()` without shell (prevents injection)
-- Max response size: 1MB for both stdout and stderr
+- Max response size: 4MB for both stdout and stderr
 - Default timeout: 30 seconds
 - SSL verification enabled by default
 

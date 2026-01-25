@@ -7,7 +7,7 @@ import { z } from "zod";
 import { spawn } from "child_process";
 import { randomUUID } from "crypto";
 // Constants
-const MAX_RESPONSE_SIZE = 1_000_000; // 1MB max response
+const MAX_RESPONSE_SIZE = 2_000_000; // 2MB max response
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const SERVER_NAME = "curl-mcp-server";
 const SERVER_VERSION = "1.0.0";
@@ -418,7 +418,14 @@ async function shutdown(signal) {
     console.error(`\nReceived ${signal}, shutting down gracefully...`);
     // Close HTTP server if running
     if (httpServer) {
-        httpServer.close();
+        await new Promise((resolve, reject) => {
+            httpServer.close((err) => {
+                if (err)
+                    reject(err);
+                else
+                    resolve();
+            });
+        });
     }
     // Close all active sessions
     for (const [sessionId, session] of sessions) {
@@ -490,23 +497,36 @@ async function runHTTP() {
         }
     });
     // GET /mcp - Handle SSE streams for existing sessions
-    app.get("/mcp", async (req, res) => {
-        const sessionId = req.headers["mcp-session-id"];
-        if (!sessionId || !sessions.has(sessionId)) {
-            res.status(400).json({ error: "Invalid or missing session ID" });
-            return;
+    app.get("/mcp", async (req, res, next) => {
+        try {
+            const sessionId = req.headers["mcp-session-id"];
+            if (!sessionId || !sessions.has(sessionId)) {
+                res.status(400).json({ error: "Invalid or missing session ID" });
+                return;
+            }
+            const session = sessions.get(sessionId);
+            await session.transport.handleRequest(req, res);
         }
-        const session = sessions.get(sessionId);
-        await session.transport.handleRequest(req, res);
+        catch (error) {
+            next(error);
+        }
     });
     // DELETE /mcp - Terminate a session
-    app.delete("/mcp", async (req, res) => {
+    app.delete("/mcp", async (req, res, next) => {
         const sessionId = req.headers["mcp-session-id"];
         if (sessionId && sessions.has(sessionId)) {
             const session = sessions.get(sessionId);
-            session.transport.close();
-            await session.server.close();
-            sessions.delete(sessionId);
+            try {
+                session.transport.close();
+                await session.server.close();
+            }
+            catch (error) {
+                next(error);
+                return;
+            }
+            finally {
+                sessions.delete(sessionId);
+            }
         }
         res.status(200).end();
     });

@@ -9,7 +9,7 @@ import {spawn, ChildProcess} from "child_process";
 import {randomUUID} from "crypto";
 
 // Constants
-const MAX_RESPONSE_SIZE = 2_000_000; // 2MB max response
+const MAX_RESPONSE_SIZE = 4_000_000; // 4MB max response
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 const SERVER_NAME = "curl-mcp-server";
 const SERVER_VERSION = "1.0.0";

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Increased maximum response size from 1MB to 2MB to support larger API responses
+- Increased maximum response size from 1MB to 4MB to support larger API responses
 
 ## [1.0.0] - 2025-12-12
 

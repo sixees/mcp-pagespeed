@@ -1,7 +1,7 @@
 import {
   executeCurlRequest,
   resolveBaseUrl
-} from "./chunk-KNPMSJ7T.js";
+} from "./chunk-LNX6NIVQ.js";
 
 // src/lib/schema/validator.ts
 import { z } from "zod";
@@ -347,7 +347,7 @@ function createToolHandler(schema, endpoint, config) {
       );
       const auth = getAuthConfig(schema.auth, config?.authOverride);
       const url = buildUrl(
-        schema.api.baseUrl,
+        config?.baseUrl ?? schema.api.baseUrl,
         endpoint.path,
         pathParams,
         { ...queryParams, ...auth.queryParams }
@@ -360,6 +360,10 @@ function createToolHandler(schema, endpoint, config) {
       };
       const jqFilter = resolveJqFilter(endpoint, params);
       const timeout = config?.timeout ?? schema.defaults?.timeout;
+      const execExtra = {
+        ...extra,
+        allowLocalhost: config?.allowLocalhost ?? extra?.allowLocalhost
+      };
       return await executeCurlRequest(
         {
           url,
@@ -376,7 +380,7 @@ function createToolHandler(schema, endpoint, config) {
           compressed: true,
           include_metadata: false
         },
-        extra
+        execExtra
       );
     } catch (error) {
       if (error instanceof AuthenticationError) {

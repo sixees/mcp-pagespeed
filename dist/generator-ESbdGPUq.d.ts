@@ -281,6 +281,10 @@ interface GeneratorConfig {
     timeout?: number;
     /** Default headers to merge */
     defaultHeaders?: Record<string, string>;
+    /** Override base URL (takes precedence over schema.api.baseUrl) */
+    baseUrl?: string;
+    /** Allow localhost requests (propagated to curl executor) */
+    allowLocalhost?: boolean;
 }
 /**
  * Generate a Zod input schema from endpoint parameter definitions.

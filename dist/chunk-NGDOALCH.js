@@ -22,7 +22,7 @@ import {
   stopRateLimitCleanup,
   validateFilePath,
   validateOutputDir
-} from "./chunk-KNPMSJ7T.js";
+} from "./chunk-LNX6NIVQ.js";
 
 // src/lib/server/lifecycle.ts
 var httpServer = null;
@@ -671,7 +671,8 @@ async function executeWithHooks(tool, params, config, hooks, sessionId, executor
           error: normalizedError
         });
       } catch (hookError) {
-        console.error("Warning: onError hook threw (suppressed to preserve original error):", hookError);
+        const hookErrorName = hookError instanceof Error ? hookError.name : "UnknownError";
+        console.error(`Warning: onError hook threw (${hookErrorName}) [suppressed to preserve original error]`);
       }
     }
     throw error;

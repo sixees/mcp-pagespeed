@@ -84,7 +84,7 @@ var SERVER = {
   /** MCP server name for protocol identification */
   NAME: "curl-mcp-server",
   /** Server version from package.json */
-  VERSION: true ? "1.1.5" : "0.0.0"
+  VERSION: true ? "2.0.1" : "0.0.0"
 };
 
 // src/lib/config/session.ts
@@ -198,8 +198,8 @@ var BLOCKED_HOSTNAME_PATTERNS_INTERNAL = Object.freeze([
   /\.nip\.io$/i,
   /\.sslip\.io$/i,
   /\.xip\.io$/i,
-  // Windows UNC paths
-  /^\\\\[^\\]+/
+  // Windows UNC paths (limit to reasonable hostname length to prevent scanning long strings)
+  /^\\\\[^\\]{1,255}/
 ]);
 function isBlockedHostname(hostname) {
   return BLOCKED_HOSTNAME_PATTERNS_INTERNAL.some((pattern) => pattern.test(hostname));
@@ -859,6 +859,9 @@ var ALLOWED_COMMANDS = ["curl"];
 async function executeCommand(command, args, timeout = LIMITS.DEFAULT_TIMEOUT_MS) {
   if (!ALLOWED_COMMANDS.includes(command)) {
     throw new Error(`Command not allowed: ${command}. Only ${ALLOWED_COMMANDS.join(", ")} can be executed.`);
+  }
+  if (!Number.isFinite(timeout) || timeout <= 0) {
+    timeout = LIMITS.DEFAULT_TIMEOUT_MS;
   }
   let requestMemoryUsage = 0;
   return new Promise((resolve4, reject) => {

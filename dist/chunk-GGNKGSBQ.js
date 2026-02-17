@@ -1,12 +1,12 @@
 import {
   McpCurlServer
-} from "./chunk-VUSOXSOB.js";
+} from "./chunk-NGDOALCH.js";
 import {
   generateToolDefinitions,
   getMethodAnnotations,
   loadApiSchema,
   loadApiSchemaFromString
-} from "./chunk-WAMZFYYM.js";
+} from "./chunk-S3OJW5AR.js";
 
 // src/lib/api-server.ts
 function configureServerFromSchema(server, schema, options) {
@@ -29,9 +29,12 @@ function configureServerFromSchema(server, schema, options) {
   if (options.disableJqQuery) {
     server.disableJqQuery();
   }
+  const mergedConfig = { ...schemaConfig, ...options.config };
   const generatorConfig = {
     defaultHeaders: schema.defaults?.headers,
     timeout: schema.defaults?.timeout,
+    baseUrl: mergedConfig.baseUrl,
+    allowLocalhost: mergedConfig.allowLocalhost,
     ...options.generatorConfig
   };
   const toolDefs = generateToolDefinitions(schema, generatorConfig);

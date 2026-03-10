@@ -12,7 +12,7 @@ import {
 import {
     JQ_QUERY_TOOL_META,
 } from "../tools/jq-query.js";
-import { LIMITS } from "../config/index.js";
+import { LIMITS, applyDefaultHeaders } from "../config/index.js";
 import { resolveBaseUrl } from "../utils/index.js";
 
 interface ConfigDefaultableParams {
@@ -36,11 +36,12 @@ function applySharedConfigDefaults<T extends ConfigDefaultableParams>(
  * Apply configuration transforms to curl_execute parameters.
  * - Prepend baseUrl to relative URLs
  * - Merge defaultHeaders with request headers
+ * - Apply default User-Agent and Referer
  * - Apply defaultTimeout if using default
  * - Apply outputDir if not specified
  * - Apply maxResultSize if not specified
  */
-function applyConfigTransformsCurl(
+export function applyConfigTransformsCurl(
     params: CurlExecuteInput,
     config: Readonly<McpCurlConfig>
 ): CurlExecuteInput {
@@ -51,10 +52,11 @@ function applyConfigTransformsCurl(
         transformed.url = resolveBaseUrl(config.baseUrl, params.url);
     }
 
-    // Merge defaultHeaders (request headers take precedence)
-    if (config.defaultHeaders) {
-        transformed.headers = { ...config.defaultHeaders, ...params.headers };
-    }
+    // Merge defaultHeaders (request headers take precedence) then apply UA/Referer defaults
+    const mergedHeaders: Record<string, string> = { ...config.defaultHeaders, ...params.headers };
+    const defaults = applyDefaultHeaders(mergedHeaders, transformed.user_agent, config);
+    transformed.headers = defaults.headers;
+    if (defaults.userAgent !== undefined) transformed.user_agent = defaults.userAgent;
 
     // Apply timeout defaults if the user didn't provide a timeout explicitly.
     // Since timeout is optional (no schema default), undefined means no explicit value.

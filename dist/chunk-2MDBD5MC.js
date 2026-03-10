@@ -1,7 +1,8 @@
 import {
+  applyDefaultHeaders,
   executeCurlRequest,
   resolveBaseUrl
-} from "./chunk-LNX6NIVQ.js";
+} from "./chunk-PH7FLIFM.js";
 
 // src/lib/schema/validator.ts
 import { z } from "zod";
@@ -352,12 +353,15 @@ function createToolHandler(schema, endpoint, config) {
         pathParams,
         { ...queryParams, ...auth.queryParams }
       );
-      const headers = {
+      const mergedHeaders = {
         ...config?.defaultHeaders,
         ...schema.defaults?.headers,
         ...auth.headers,
         ...headerParams
       };
+      const defaults = applyDefaultHeaders(mergedHeaders, void 0, config);
+      const headers = defaults.headers;
+      if (defaults.userAgent !== void 0) headers["User-Agent"] = defaults.userAgent;
       const jqFilter = resolveJqFilter(endpoint, params);
       const timeout = config?.timeout ?? schema.defaults?.timeout;
       const execExtra = {

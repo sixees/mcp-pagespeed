@@ -1,12 +1,12 @@
 import {
   McpCurlServer
-} from "./chunk-NGDOALCH.js";
+} from "./chunk-IHVQ6P2F.js";
 import {
   generateToolDefinitions,
   getMethodAnnotations,
   loadApiSchema,
   loadApiSchemaFromString
-} from "./chunk-S3OJW5AR.js";
+} from "./chunk-2MDBD5MC.js";
 
 // src/lib/api-server.ts
 function configureServerFromSchema(server, schema, options) {
@@ -35,6 +35,8 @@ function configureServerFromSchema(server, schema, options) {
     timeout: schema.defaults?.timeout,
     baseUrl: mergedConfig.baseUrl,
     allowLocalhost: mergedConfig.allowLocalhost,
+    defaultUserAgent: mergedConfig.defaultUserAgent,
+    defaultReferer: mergedConfig.defaultReferer,
     ...options.generatorConfig
   };
   const toolDefs = generateToolDefinitions(schema, generatorConfig);

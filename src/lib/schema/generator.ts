@@ -12,6 +12,7 @@ import type {
 } from "./types.js";
 import { executeCurlRequest, type CurlExecuteResult, type CurlExecuteExtra } from "../tools/curl-execute.js";
 import { resolveBaseUrl } from "../utils/index.js";
+import { applyDefaultHeaders } from "../config/index.js";
 
 /**
  * Error thrown when authentication is required but not available.
@@ -37,6 +38,10 @@ export interface GeneratorConfig {
     baseUrl?: string;
     /** Allow localhost requests (propagated to curl executor) */
     allowLocalhost?: boolean;
+    /** Default User-Agent for all requests. Empty string disables. */
+    defaultUserAgent?: string;
+    /** Default Referer for all requests. Empty string disables. */
+    defaultReferer?: string;
 }
 
 /**
@@ -345,12 +350,17 @@ function createToolHandler(
             );
 
             // Merge headers: defaults -> schema defaults -> auth -> endpoint params
-            const headers: Record<string, string> = {
+            const mergedHeaders: Record<string, string> = {
                 ...config?.defaultHeaders,
                 ...schema.defaults?.headers,
                 ...auth.headers,
                 ...headerParams,
             };
+
+            // Apply default User-Agent and Referer
+            const defaults = applyDefaultHeaders(mergedHeaders, undefined, config);
+            const headers = defaults.headers;
+            if (defaults.userAgent !== undefined) headers["User-Agent"] = defaults.userAgent;
 
             // Determine jq filter
             const jqFilter = resolveJqFilter(endpoint, params);

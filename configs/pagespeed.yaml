@@ -74,7 +74,10 @@ endpoints:
       filterPresets:
         - name: scores
           jqFilter: ".lighthouseResult.categories"
+          description: "Category scores as 0-100 integers (performance, accessibility, best_practices, seo)"
         - name: metrics
           jqFilter: ".lighthouseResult.audits"
+          description: "Core Web Vitals as value/display pairs (lcp, fcp, cls, tbt, tti)"
         - name: summary
           jqFilter: ".lighthouseResult"
+          description: "Both scores and metrics plus analyzed URL and strategy"

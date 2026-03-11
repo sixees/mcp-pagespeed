@@ -33,6 +33,33 @@ describe("McpCurlServer", () => {
             const result = server.configure({ baseUrl: "https://api.example.com" });
             expect(result).toBe(server);
         });
+
+        it("should warn on unknown config keys", () => {
+            const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+            server.configure({ serverName: "test" } as any);
+            expect(warnSpy).toHaveBeenCalledOnce();
+            expect(warnSpy).toHaveBeenCalledWith(
+                expect.stringContaining('unknown config key "serverName"')
+            );
+            warnSpy.mockRestore();
+        });
+
+        it("should not absorb unknown fields into config", () => {
+            vi.spyOn(console, "warn").mockImplementation(() => {});
+            server.configure({ serverName: "test", baseUrl: "https://api.example.com" } as any);
+            const config = server.getConfig() as Record<string, unknown>;
+            expect(config.baseUrl).toBe("https://api.example.com");
+            expect(config.serverName).toBeUndefined();
+            vi.restoreAllMocks();
+        });
+
+        it("should not warn on known config keys", () => {
+            const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+            server.configure({ baseUrl: "https://api.example.com", defaultTimeout: 30 });
+            expect(warnSpy).not.toHaveBeenCalled();
+            warnSpy.mockRestore();
+        });
+
     });
 
     describe("disableCurlExecute()", () => {
@@ -109,6 +136,30 @@ describe("McpCurlServer", () => {
             // The utilities should have access to the config
             expect(typeof utils.executeRequest).toBe("function");
             expect(typeof utils.queryFile).toBe("function");
+        });
+
+        it("should return different instances before start (no caching)", () => {
+            const utils1 = server.utilities();
+            const utils2 = server.utilities();
+            expect(utils1).not.toBe(utils2);
+        });
+
+        it("should invalidate cached utilities after shutdown()", async () => {
+            // Simulate post-start frozen state
+            (server as any)._started = true;
+            (server as any)._frozenConfig = Object.freeze({});
+
+            // With frozen config, utilities() should cache (same instance)
+            const cached1 = server.utilities();
+            const cached2 = server.utilities();
+            expect(cached1).toBe(cached2);
+
+            // After shutdown, cache is cleared — fresh instances again
+            await server.shutdown();
+            const fresh1 = server.utilities();
+            const fresh2 = server.utilities();
+            expect(fresh1).not.toBe(cached1);
+            expect(fresh1).not.toBe(fresh2);
         });
     });
 

@@ -72,6 +72,19 @@ interface CustomToolDef {
  *   .start("stdio");
  * ```
  */
+
+const KNOWN_CONFIG_KEYS_ARRAY = [
+    "baseUrl", "defaultHeaders", "defaultTimeout", "outputDir",
+    "maxResultSize", "allowLocalhost", "port", "host",
+    "authToken", "allowedOrigins", "defaultUserAgent", "defaultReferer",
+] as const satisfies readonly (keyof McpCurlConfig)[];
+
+// Compile-time check: fails if any McpCurlConfig key is missing from the array
+type _AssertExhaustive = [Exclude<keyof McpCurlConfig, (typeof KNOWN_CONFIG_KEYS_ARRAY)[number]>] extends [never] ? true : never;
+const _: _AssertExhaustive = true;
+
+const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set(KNOWN_CONFIG_KEYS_ARRAY);
+
 export class McpCurlServer {
     private _config: McpCurlConfig = {};
     private _frozenConfig: Readonly<McpCurlConfig> | null = null;
@@ -90,6 +103,7 @@ export class McpCurlServer {
     private _httpServer: Server | null = null;
     private _sessionManager: SessionManager | null = null;
     private _rateLimitInterval: NodeJS.Timeout | null = null;
+    private _utilities: InstanceUtilities | null = null;
 
     /**
      * Configure server options.
@@ -101,7 +115,18 @@ export class McpCurlServer {
      */
     configure(config: Partial<McpCurlConfig>): this {
         this.ensureNotStarted("configure()");
-        this._config = { ...this._config, ...config };
+        const picked: Partial<McpCurlConfig> = {};
+        const knownKeysList = KNOWN_CONFIG_KEYS_ARRAY.join(", ");
+        for (const key of Object.keys(config)) {
+            if (KNOWN_CONFIG_KEYS.has(key)) {
+                (picked as Record<string, unknown>)[key] = (config as Record<string, unknown>)[key];
+            } else {
+                console.warn(
+                    `McpCurlServer.configure(): unknown config key "${key}" ignored. Known keys: ${knownKeysList}`
+                );
+            }
+        }
+        this._config = { ...this._config, ...picked };
         return this;
     }
 
@@ -257,7 +282,13 @@ export class McpCurlServer {
      * @returns Instance utilities object
      */
     utilities(): InstanceUtilities {
-        return createInstanceUtilities(this.getConfig());
+        if (!this._frozenConfig) {
+            return createInstanceUtilities(this.getConfig());
+        }
+        if (!this._utilities) {
+            this._utilities = createInstanceUtilities(this._frozenConfig);
+        }
+        return this._utilities;
     }
 
     /**
@@ -337,6 +368,7 @@ export class McpCurlServer {
             this._server = null;
             this._started = false;
             this._frozenConfig = null;
+            this._utilities = null;
             throw error;
         }
     }
@@ -417,6 +449,7 @@ export class McpCurlServer {
             // Reset state to allow potential reuse
             this._started = false;
             this._frozenConfig = null;
+            this._utilities = null;
             this._rateLimitInterval = null;
             this._sessionManager = null;
         }

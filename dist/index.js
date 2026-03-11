@@ -5,7 +5,7 @@ import {
   registerAllCapabilities,
   registerShutdownHandlers,
   runHTTP
-} from "./chunk-IHVQ6P2F.js";
+} from "./chunk-MFYYUUZW.js";
 import {
   cleanupOrphanedTempDirs,
   startRateLimitCleanup,

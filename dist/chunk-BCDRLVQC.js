@@ -34,7 +34,8 @@ var ResponseConfigSchema = z.object({
   jqFilter: z.string().optional(),
   filterPresets: z.array(z.object({
     name: z.string().min(1),
-    jqFilter: z.string().min(1)
+    jqFilter: z.string().min(1),
+    description: z.string().trim().min(1).max(500).optional()
   })).optional()
 }).optional();
 var EndpointSchema = z.object({
@@ -423,11 +424,18 @@ function getMethodAnnotations(method) {
 }
 function buildToolDescription(endpoint) {
   const parts = [endpoint.description];
+  const CONTROL_CHARS = /[\x00-\x1F\x7F-\x9F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]+/g;
   if (endpoint.response?.filterPresets?.length) {
     parts.push("");
     parts.push("Available filter presets:");
     for (const preset of endpoint.response.filterPresets) {
-      parts.push(`  - ${preset.name}: applies filter "${preset.jqFilter}"`);
+      if (preset.description) {
+        const desc = preset.description.replace(CONTROL_CHARS, " ");
+        parts.push(`  - ${preset.name}: ${desc}`);
+      } else {
+        const safeFilter = preset.jqFilter.replace(CONTROL_CHARS, " ");
+        parts.push(`  - ${preset.name}: applies filter "${safeFilter}"`);
+      }
     }
   }
   return parts.join("\n");

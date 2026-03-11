@@ -446,13 +446,20 @@ export function getMethodAnnotations(method: HttpMethod) {
  */
 function buildToolDescription(endpoint: EndpointDefinition): string {
     const parts: string[] = [endpoint.description];
+    const CONTROL_CHARS = /[\x00-\x1F\x7F-\x9F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]+/g;
 
     // Document filter presets if available
     if (endpoint.response?.filterPresets?.length) {
         parts.push("");
         parts.push("Available filter presets:");
         for (const preset of endpoint.response.filterPresets) {
-            parts.push(`  - ${preset.name}: applies filter "${preset.jqFilter}"`);
+            if (preset.description) {
+                const desc = preset.description.replace(CONTROL_CHARS, " ");
+                parts.push(`  - ${preset.name}: ${desc}`);
+            } else {
+                const safeFilter = preset.jqFilter.replace(CONTROL_CHARS, " ");
+                parts.push(`  - ${preset.name}: applies filter "${safeFilter}"`);
+            }
         }
     }
 

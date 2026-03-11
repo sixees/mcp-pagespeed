@@ -2,98 +2,61 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## What This Is
+
+PageSpeed Insights MCP server — a fork of [mcp-curl](https://github.com/sixees/mcp-curl) that exposes a
+single `analyze_pagespeed` tool for running Google Lighthouse analysis via the PageSpeed Insights API v5.
+
 ## Build Commands
 
 ```bash
 npm install          # Install dependencies
 npm run build        # Compile TypeScript to dist/
 npm run dev          # Watch mode compilation
-npm start            # Run the server (stdio transport)
 npm test             # Run vitest tests
-TRANSPORT=http PORT=3000 npm start  # Run with HTTP transport
+npx tsx configs/pagespeed.ts  # Run the PageSpeed MCP server
 ```
 
 ## Architecture
 
-MCP server enabling LLMs to execute cURL commands. Modular TypeScript library with three entry points:
+Fork-specific code lives in `configs/`:
 
-- `src/index.ts` — CLI entry point (thin wrapper selecting stdio/HTTP transport)
-- `src/lib.ts` — Library entry point (main package export: `McpCurlServer`, types, schema utilities)
-- `src/lib/api-server.ts` — `createApiServer()` factory for YAML-driven servers
+- `configs/pagespeed.ts` — Entry point. Creates an `McpCurlServer`, disables `curl_execute`, registers a
+  custom `analyze_pagespeed` tool with TypeScript post-processing (scores as 0-100 integers, Core Web Vitals
+  extraction). Uses `generateInputSchema()` for Zod schema from YAML, `getAuthConfig()` for API key, and
+  `server.utilities().executeRequest()` for the actual HTTP call.
+- `configs/pagespeed.yaml` — YAML API definition. Loaded at runtime for config values (baseUrl, timeout,
+  headers, auth) and input schema generation. The jqFilter/filterPresets exist only to drive
+  `generateInputSchema()` — actual response processing is in TypeScript.
 
-### Module Map
-
-```
-src/lib/
-├── config/            # Constants: limits, env vars, server identity, session config
-│   └── security/      # SSRF patterns, blocked IPs/hostnames, validation patterns (pure predicates)
-├── types/             # TypeScript types: response, session, rate-limit, jq tokens, public API types
-├── security/          # Stateful security: DNS resolution, SSRF validation, rate limiter, file validation
-├── jq/                # JQ filter engine: tokenizer, parser, filter application
-├── files/             # File system: temp directory manager, output directory validation
-├── execution/         # cURL execution: command executor (allowlist), args builder, memory tracker
-├── response/          # Response processing: parser, formatter, file saver, processor (orchestration)
-├── server/            # MCP server: factory, Zod schemas, registration, lifecycle/shutdown
-├── session/           # HTTP session manager
-├── tools/             # Tool handlers: curl_execute, jq_query
-├── resources/         # MCP resources: API documentation
-├── prompts/           # MCP prompts: api-test, api-discovery
-├── transports/        # Transport implementations: stdio, HTTP (Express + SSE)
-├── schema/            # YAML schema system: types, validator, loader, tool generator
-├── extensible/        # McpCurlServer class, hooks executor, tool wrapper, instance utilities
-└── utils/             # Shared utilities: error handling, URL helpers
-```
-
-### Extension System
-
-- **`McpCurlServer`** (`src/lib/extensible/mcp-curl-server.ts`) — fluent builder: `.configure()`, `.beforeRequest()`, `.afterResponse()`, `.onError()`, `.registerCustomTool()`, `.disableCurlExecute()`, `.disableJqQuery()`, `.start()`, `.shutdown()`
-- **Hooks** — `beforeRequest` (modify params or short-circuit), `afterResponse` (logging/metrics), `onError` (error tracking). Fail-fast semantics.
-- **Custom tools** — Register additional MCP tools via `.registerCustomTool(id, meta, handler)`
-- **YAML schema** — `loadApiSchema()` + `generateToolDefinitions()` for declarative API endpoint → tool mapping
-- **Instance utilities** — `.utilities()` for direct config-aware `executeRequest()` / `queryFile()` (bypasses hooks)
+The underlying mcp-curl library provides the `McpCurlServer` extension system, security layer, and transport.
+See [upstream docs](https://github.com/sixees/mcp-curl) for the full library API.
 
 ### Key Design Decisions
 
-- Composition with builder pattern (not inheritance)
-- Immutable security data: frozen arrays/sets with pure predicate functions
-- Layered architecture: pure config predicates → stateful security functions → tool handlers
-- `spawn()` without shell for command execution; compile-time + runtime allowlist
-- DNS resolved before SSRF validation; cURL pinned to validated IP via `--resolve`
+- `curl_execute` disabled; replaced by custom `analyze_pagespeed` tool
+- `jq_query` intentionally kept enabled — sandboxed to temp/output/cwd, useful for querying auto-saved results
+- TypeScript post-processing instead of jq because the built-in jq engine can't do object construction or arithmetic
+- `Record<string, any>` for API response types — external API with version-dependent shape; `?.`/`??` handle missing fields at runtime
+- YAML schema used for config and input schema generation, not for tool handler generation
 
 ## Tools
 
-- **`curl_execute`** — HTTP requests with structured params, auth, jq filtering, auto-save for large responses
-- **`jq_query`** — Query saved JSON files without new HTTP requests
+- **`analyze_pagespeed`** — Lighthouse analysis with `filter_preset` for scores, metrics, or summary output
+- **`jq_query`** — Query saved JSON response files (inherited from mcp-curl)
 
 ## Security
 
-**Network:** SSRF protection (private IPs, cloud metadata, DNS rebinding services, internal TLDs), DNS rebinding prevention, protocol whitelist (`http`/`https` only), `--proto =http,https` defense-in-depth, `--max-filesize` 10MB early abort, Windows UNC path blocking, localhost blocked by default (`MCP_CURL_ALLOW_LOCALHOST=true` to enable with port restrictions)
-
-**Rate limiting:** 60 req/min per host, 300 req/min per client
-
-**Input validation:** Zod schemas, command allowlist (`curl` only), `spawn()` without shell, CRLF injection prevention, `--data-raw`/`--form-string` against `@` file exfil, per-request unique metadata separators
-
-**File access:** `jq_query` restricted to temp dir / `MCP_CURL_OUTPUT_DIR` / cwd (including subdirs), symlinks resolved via `realpath()`, path traversal (`..`) rejected
-
-**Resource limits:** 10MB response/file processing, 1MB max inline return (default 500KB), 100MB global memory, 20 max jq filter paths, 100ms jq parse timeout, 30s default request timeout
-
-**HTTP transport:** Optional bearer token auth (`MCP_AUTH_TOKEN`), 100 max sessions, 1h idle timeout
-
-**Error logging:** Minimal — `tool_name error: [hostname/filename] ErrorClassName` (no message content)
-
-**Timeout defaults:** `McpCurlConfig.defaultTimeout` → system default 30s (`LIMITS.DEFAULT_TIMEOUT_MS / 1000`)
+All mcp-curl security applies: SSRF protection, DNS rebinding prevention, rate limiting, input validation,
+file access controls, resource limits. `curl_execute` is disabled — only `analyze_pagespeed` can make requests.
 
 ## Code Style
 
-- Modern ES6+ with strict TypeScript
-- ESM modules (`"type": "module"` in package.json)
+- Modern ES6+ with strict TypeScript, ESM modules
 - Zod for runtime schema validation
 - Prefer async/await, pure functions, early returns
-- Cross-platform: uses `path.isAbsolute()`, `path.basename()`, `path.resolve()` for Windows/Unix compatibility
 
 ## Testing
 
 - `npm test` runs vitest (`vitest run`)
-- `npm run test:watch` for watch mode
-- Test files are co-located: `*.test.ts` next to their source files
-- Key test files: `mcp-curl-server.test.ts`, `ssrf.test.ts`, `parser.test.ts`, `filter.test.ts`, `schema.test.ts`, `session-manager.test.ts`, `http.test.ts`
+- Test files are co-located: `*.test.ts` next to source files

@@ -1187,6 +1187,63 @@ describe("generateToolDefinitions", () => {
         expect(tools[0].description).toContain('raw: applies filter "."');
     });
 
+    it("strips Unicode bidi overrides and zero-width characters from descriptions", () => {
+        const schema: ApiSchema = {
+            ...baseSchema,
+            endpoints: [
+                {
+                    id: "get_data",
+                    path: "/data",
+                    method: "GET",
+                    title: "Get Data",
+                    description: "Get data",
+                    response: {
+                        filterPresets: [
+                            {
+                                name: "safe",
+                                jqFilter: ".data",
+                                // Bidi override (U+202E) + zero-width space (U+200B) + C1 control (U+0085)
+                                description: "normal\u202Ehidden\u200Btext\u0085end",
+                            },
+                        ],
+                    },
+                },
+            ],
+        };
+
+        const tools = generateToolDefinitions(schema);
+        expect(tools[0].description).toContain("safe: normal hidden text end");
+        // Verify no bidi/zero-width chars remain
+        expect(tools[0].description).not.toMatch(/[\u202E\u200B\u0085]/);
+    });
+
+    it("strips control characters from jqFilter in fallback description", () => {
+        const schema: ApiSchema = {
+            ...baseSchema,
+            endpoints: [
+                {
+                    id: "get_data",
+                    path: "/data",
+                    method: "GET",
+                    title: "Get Data",
+                    description: "Get data",
+                    response: {
+                        filterPresets: [
+                            {
+                                name: "ids",
+                                jqFilter: ".results\u200B[].id",
+                            },
+                        ],
+                    },
+                },
+            ],
+        };
+
+        const tools = generateToolDefinitions(schema);
+        expect(tools[0].description).toContain('ids: applies filter ".results [].id"');
+        expect(tools[0].description).not.toMatch(/[\u200B]/);
+    });
+
     it("uses auth override from generator config", async () => {
         const schema: ApiSchema = {
             ...baseSchema,

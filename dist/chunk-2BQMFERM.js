@@ -6,7 +6,7 @@ import {
   getMethodAnnotations,
   loadApiSchema,
   loadApiSchemaFromString
-} from "./chunk-W4QAMU53.js";
+} from "./chunk-BCDRLVQC.js";
 
 // src/lib/api-server.ts
 function configureServerFromSchema(server, schema, options) {

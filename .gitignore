@@ -1,0 +1,47 @@
+# Dependencies
+/node_modules
+
+# Coverage
+/coverage
+
+# Bundle analysis
+/stats
+
+# Environment
+.env
+.env.backup
+.env.production
+.env.local
+env.json
+
+# Logs
+npm-debug.log
+yarn-error.log
+*.log
+
+# IDE
+/.idea
+/.vscode
+/.zed
+/.claude
+/.junie
+.phpactor.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Package manager locks (use package-lock.json)
+yarn.lock
+pnpm-lock.yaml
+
+# App config (fork workflow — actual configs are local-only)
+# Template and README in configs/ are tracked; actual definitions are not
+configs/*.yaml
+configs/*.yml
+configs/*.ts
+configs/*.js
+configs/*.json
+
+# Runtime output
+/output

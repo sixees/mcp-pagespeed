@@ -115,3 +115,45 @@ New test files from upstream: `api-discovery.test.ts`, `api-test.test.ts`, `sche
 
 ### Resolved Todos
 <!-- None resolved this session -->
+
+---
+
+## Code Review — 2026-04-04
+
+### Review Summary
+- **Reviewer:** automated multi-agent review (security-sentinel + code-simplicity-reviewer)
+- **Agents used:** security-sentinel, code-simplicity-reviewer
+- **Findings:** 🔴 P1: 0 | 🟡 P2: 2 | 🔵 P3: 1
+
+### Handoff Assessment
+
+The builder's self-assessment was honest and accurate. The handoff correctly flagged the `CurlExecuteSchema.url` / `httpOnlyUrl()` divergence as a known issue, surfaced the `tsc` ESM flag requirement proactively, and accurately described the security semantics of all three URL enforcement points. No undisclosed security issues were found. The one gap the builder did not flag: `httpOnlyUrl()` ships with zero unit tests.
+
+### Key Findings
+
+| ID | Severity | Category | Description | Todo File |
+|----|----------|----------|-------------|-----------|
+| 1 | 🟡 P2 | Testing | `httpOnlyUrl()` has zero test coverage despite security-adjacent scheme enforcement | `docs/todos/001-pending-p2-httponly-url-missing-tests.md` |
+| 2 | 🟡 P2 | SPR/DRY | `schemas.ts` and `validator.ts` duplicate the `z.url().refine()` pattern instead of using `httpOnlyUrl()` — plan acceptance criterion not met | `docs/todos/002-pending-p2-dry-httponly-url-not-reused.md` |
+| 3 | 🔵 P3 | Quality | Scheme check uses `split(":")` heuristic; SSRF layer uses more robust `new URL().protocol` form | `docs/todos/003-pending-p3-scheme-check-split-heuristic.md` |
+
+### Verified Claims
+
+| Handoff Claim | Verified? | Notes |
+|---------------|-----------|-------|
+| 330 tests passed | ✅ Yes | Confirmed: `npm test` → 18 test files, 330 passed, 7 skipped |
+| `configs/pagespeed.ts` type-check passes | ✅ Yes | `tsc --noEmit --skipLibCheck --module nodenext ...` exits 0 |
+| `url.ts` has `httpOnlyUrl` after merge | ✅ Yes | `grep "httpOnlyUrl" src/lib/utils/url.ts` returns match |
+| `CurlExecuteSchema.url` uses inline `.refine()` not `httpOnlyUrl()` | ✅ Yes (acknowledged) | DRY violation confirmed; security semantics identical |
+| No known issues beyond listed | ⚠️ Partial | `httpOnlyUrl()` missing tests not surfaced in handoff |
+
+### Outstanding Todos
+<!-- Todos created during this review -->
+| File | Priority | Description | Source |
+|------|----------|-------------|--------|
+| `docs/todos/001-pending-p2-httponly-url-missing-tests.md` | P2 | Add unit tests for `httpOnlyUrl()` | code-review |
+| `docs/todos/002-pending-p2-dry-httponly-url-not-reused.md` | P2 | Consolidate http/https scheme check behind `httpOnlyUrl()` | code-review |
+| `docs/todos/003-pending-p3-scheme-check-split-heuristic.md` | P3 | Replace `split(":")` heuristic with `new URL().protocol` form | code-review |
+
+### Blockers
+None — clear to merge. P2 todos are post-merge follow-up items. Security semantics are correct at all three enforcement points; the issues are code quality and test coverage.

@@ -1,225 +1,124 @@
-# Getting Started with mcp-curl
+# Getting Started
 
-This guide walks you through creating your first MCP cURL server.
+This guide walks you through connecting the PageSpeed Insights MCP server to an AI client.
 
 ## Prerequisites
 
 - Node.js 18 or later
-- npm or yarn
-- An MCP client (Claude Desktop, Claude Code, or another MCP-compatible client)
+- A Google API key with the PageSpeed Insights API enabled (strongly recommended)
+- An MCP client: Claude Desktop, Claude Code, or any MCP-compatible client
+
+### Getting a Google API Key
+
+Without an API key the server uses an anonymous shared quota that is typically exhausted very quickly. To get your own key:
+
+1. Go to [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)
+2. Create a new API key
+3. (Optional but recommended) Restrict the key to the **PageSpeed Insights API**
+
+Set it as an environment variable before running the server:
+
+```bash
+export PAGESPEED_API_KEY=your-key-here
+```
 
 ## Installation
 
-Create a new project and install mcp-curl:
+```bash
+git clone https://github.com/sixees/mcp-pagespeed.git
+cd mcp-pagespeed
+npm install
+```
+
+## Running the Server Manually
 
 ```bash
-mkdir my-mcp-server
-cd my-mcp-server
-npm init -y
-npm install mcp-curl
+npx tsx configs/pagespeed.ts
 ```
 
-Add TypeScript (recommended):
+The server starts on stdio, ready for an MCP client to connect. You should see:
 
-```bash
-npm install -D typescript @types/node
-npx tsc --init
+```
+cURL MCP server running on stdio
 ```
 
-Update `tsconfig.json` for ESM:
+## Connecting Claude Desktop
 
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "outDir": "./dist",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true
-  },
-  "include": [
-    "src/**/*"
-  ]
-}
-```
-
-Update `package.json`:
-
-```json
-{
-  "type": "module",
-  "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js"
-  }
-}
-```
-
-## Creating Your First Server
-
-Create `src/index.ts`:
-
-```typescript
-import {McpCurlServer} from "mcp-curl";
-
-const server = new McpCurlServer()
-    .configure({
-        baseUrl: "https://jsonplaceholder.typicode.com",
-    });
-
-await server.start("stdio");
-```
-
-Build and run:
-
-```bash
-npm run build
-npm start
-```
-
-The server is now running on stdio, ready for an MCP client to connect.
-
-## Running with HTTP Transport
-
-For web-based clients or testing with HTTP:
-
-```typescript
-import {McpCurlServer} from "mcp-curl";
-
-const server = new McpCurlServer()
-    .configure({
-        baseUrl: "https://jsonplaceholder.typicode.com",
-        port: 3000,
-    });
-
-await server.start("http");
-```
-
-The server will listen at `http://localhost:3000/mcp`.
-
-## Adding Configuration
-
-Common configuration options:
-
-```typescript
-const server = new McpCurlServer()
-    .configure({
-        // Base URL prepended to relative URLs
-        baseUrl: "https://api.example.com",
-
-        // Headers added to all requests
-        defaultHeaders: {
-            "Accept": "application/json",
-            "X-Client": "my-mcp-server",
-        },
-
-        // Default timeout in seconds
-        defaultTimeout: 60,
-
-        // Max response size before auto-saving to file
-        maxResultSize: 500_000,
-
-        // Allow localhost requests (blocked by default for security)
-        allowLocalhost: false,
-    });
-```
-
-## Adding Hooks
-
-Hooks let you intercept requests and responses:
-
-```typescript
-const server = new McpCurlServer()
-    .configure({baseUrl: "https://api.example.com"})
-
-    // Add auth to all requests
-    .beforeRequest((ctx) => {
-        if (ctx.tool !== "curl_execute" || !("headers" in ctx.params)) {
-            return;
-        }
-
-        const token = process.env.API_TOKEN;
-        if (!token) {
-            console.warn("API_TOKEN is not set; skipping Authorization header.");
-            return;
-        }
-
-        return {
-            params: {
-                headers: {
-                    ...(ctx.params.headers ?? {}),
-                    "Authorization": `Bearer ${token}`,
-                },
-            },
-        };
-    })
-
-    // Log all responses (use console.error for stdio transport)
-    .afterResponse((ctx) => {
-        console.error(`${ctx.tool}: ${ctx.response.length} bytes`);
-    })
-
-    // Track errors
-    .onError((ctx) => {
-        console.error(`Error in ${ctx.tool}:`, ctx.error.message);
-    });
-
-await server.start("stdio");
-```
-
-## Testing with Claude Desktop
-
-Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+Add the server to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
-    "my-api": {
-      "command": "node",
-      "args": [
-        "/path/to/my-mcp-server/dist/index.js"
-      ]
+    "pagespeed": {
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/mcp-pagespeed/configs/pagespeed.ts"],
+      "env": {
+        "PAGESPEED_API_KEY": "your-key-here"
+      }
     }
   }
 }
 ```
 
-Restart Claude Desktop. Your server's tools will now be available.
+Restart Claude Desktop. The `analyze_pagespeed` tool will be available in your conversations.
 
-## Testing with Claude Code
+## Connecting Claude Code
 
 Add to your project's `.mcp.json`:
 
 ```json
 {
   "mcpServers": {
-    "my-api": {
-      "command": "node",
-      "args": [
-        "./dist/index.js"
-      ]
+    "pagespeed": {
+      "command": "npx",
+      "args": ["tsx", "/absolute/path/to/mcp-pagespeed/configs/pagespeed.ts"],
+      "env": {
+        "PAGESPEED_API_KEY": "your-key-here"
+      }
     }
   }
 }
 ```
 
-## Next Steps
+## Using the Tool
 
-- [Configuration Reference](./configuration.md) - All configuration options
-- [Hooks Guide](./hooks.md) - Detailed hook patterns
-- [YAML Schema](./api-schema.md) - Define APIs declaratively
-- [Custom Tools](./custom-tools.md) - Create specialized tools
+Once connected, ask your AI assistant:
 
-## Example Project Structure
+> "Analyze the PageSpeed performance of https://example.com"
 
-```text
-my-mcp-server/
-├── package.json
-├── tsconfig.json
-└── src/
-    └── index.ts
+Or call it directly (for testing):
+
+> "Use analyze_pagespeed with url=https://example.com, strategy=DESKTOP, filter_preset=scores"
+
+**Note:** Analysis takes 15–45 seconds — the server is running a full Lighthouse audit via Google's infrastructure.
+
+## Testing the Connection
+
+Run the integration test script to verify everything works end-to-end:
+
+```bash
+PAGESPEED_API_KEY=your-key npx tsx configs/pagespeed-agent-test.ts
 ```
 
-See the [examples/basic/](../examples/basic/) directory for a complete working example.
+This simulates an AI agent connecting to the server and calling `analyze_pagespeed`. All checks should pass.
+
+You can also test a different URL or strategy:
+
+```bash
+TEST_URL=https://yoursite.com STRATEGY=DESKTOP PAGESPEED_API_KEY=your-key npx tsx configs/pagespeed-agent-test.ts
+```
+
+## Troubleshooting
+
+**"PageSpeed API returned 429: Quota exceeded"** — Set `PAGESPEED_API_KEY`. The anonymous quota is shared and frequently exhausted.
+
+**"PageSpeed API returned 400"** — The URL is malformed or not publicly reachable.
+
+**Analysis takes longer than 60 seconds** — The server has a 60-second timeout. Slow or large pages occasionally exceed this. Try again or use a simpler URL.
+
+**Tool not appearing in Claude** — Restart Claude Desktop after editing the config. Check that the path in `args` is absolute and correct.
+
+## Next Steps
+
+- [Configuration](./configuration.md) — API key, strategy, and output options
+- [YAML Schema Reference](./api-schema.md) — How `pagespeed.yaml` drives config and input schema generation

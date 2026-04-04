@@ -17,6 +17,10 @@ describe("api-test prompt — URL scheme allowlist", () => {
         expect(apiTestUrlSchema.safeParse("javascript:alert(1)").success).toBe(false);
     });
 
+    it("rejects data: URLs", () => {
+        expect(apiTestUrlSchema.safeParse("data:text/html,<h1>x</h1>").success).toBe(false);
+    });
+
     it("accepts http:// URLs", () => {
         expect(apiTestUrlSchema.safeParse("http://api.example.com").success).toBe(true);
     });

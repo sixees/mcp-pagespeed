@@ -54,7 +54,7 @@ The fork was created by importing the upstream source as a flat commit (`fffee51
 
 > **`.gitignore` must be reconciled manually.** The fork has these lines that upstream does not — they must survive the merge or the fork's files vanish from version control:
 >
-> ```
+> ```gitignore
 > !configs/pagespeed.ts
 > !configs/pagespeed.yaml
 > /docs/*

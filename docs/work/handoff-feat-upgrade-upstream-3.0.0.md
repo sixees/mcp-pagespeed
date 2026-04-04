@@ -91,9 +91,10 @@ New test files from upstream: `api-discovery.test.ts`, `api-test.test.ts`, `sche
 
 ## Commit history
 
-```
+```text
 71aa406 chore: merge upstream/main (mcp-curl 3.0.1)
 ```
+
 (Plus 20 upstream commits from `upstream/main` now in fork history)
 
 ## Review context
@@ -108,6 +109,7 @@ New test files from upstream: `api-discovery.test.ts`, `api-test.test.ts`, `sche
 - [ ] Consider forwarding `_extra` to `executeRequest` for future HTTP transport session support
 
 ### Outstanding Todos
+
 | File | Priority | Description | Source |
 |------|----------|-------------|--------|
 | `docs/todos/cache-utilities.md` | Low | Cache utilities implementation (may already be done) | Pre-existing fork todo |
@@ -171,3 +173,22 @@ All three review todos resolved in the same session:
 | `docs/todos/001-pending-p2-httponly-url-missing-tests.md` | Added 9 unit tests for `httpOnlyUrl()` to `url.test.ts`; suite now 339 tests (was 330) |
 
 **Test results after fixes:** 339 passed, 7 skipped. `tsc` gate: exit 0.
+
+---
+
+## PR Review Comments Addressed — 2026-04-04
+
+### Changes Made
+
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| `plan.md` — tsc command missing ESM flags | @gemini-code-assist | Already fixed | Fixed in commit `8b994f6`; replied to confirm |
+| `CHANGELOG.md` — missing `3.0.1` section | @coderabbitai | False positive | CHANGELOG has both `3.0.2` and `3.0.1` entries; replied to clarify |
+| `plan.md:57` — `.gitignore` fence missing language | @coderabbitai | Fix needed | Added `gitignore` language identifier |
+| `handoff.md:94` — fence missing language + blank lines | @coderabbitai | Fix needed | Added `text` lang; added blank lines around `### Outstanding Todos` |
+| `api-test.test.ts:27` — missing `data:` rejection test | @coderabbitai | Fix needed | Added `data:` test (matches `api-discovery.test.ts` parity; suite: 340→341) |
+
+### Files Modified
+- `docs/plans/2026-04-04-feat-upgrade-upstream-mcp-curl-3-0-0-plan.md` — code fence language
+- `docs/work/handoff-feat-upgrade-upstream-3.0.0.md` — markdown lint fixes
+- `src/lib/prompts/api-test.test.ts` — `data:` rejection test added

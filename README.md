@@ -1,21 +1,21 @@
-# cURL MCP Server
+# PageSpeed Insights MCP Server
 
-A security-hardened MCP server that gives LLMs the ability to make HTTP requests via cURL. Use it as a standalone
-server, extend it programmatically, or define APIs declaratively with YAML.
+An MCP server that gives LLMs the ability to run Google PageSpeed Insights analysis. Built as a fork of
+[mcp-curl](https://github.com/sixees/mcp-curl) using its extension system.
 
-**Key features:**
+## Setup
 
-- **Security-first** — SSRF protection, DNS rebinding prevention, rate limiting, input validation
-- **Extensible** — `McpCurlServer` class with hooks, custom tools, and configuration
-- **YAML-driven** — Define API endpoints declaratively and generate MCP tools automatically
-- **Two tools** — `curl_execute` for HTTP requests, `jq_query` for querying saved JSON files
+```bash
+git clone https://github.com/sixees/mcp-pagespeed.git
+cd mcp-pagespeed && npm install && npm run build
+```
 
-## Quick Start: MCP Server
+## MCP Configuration
 
 ### Claude Code
 
 ```bash
-claude mcp add curl -- npx -y github:sixees/mcp-curl
+claude mcp add pagespeed -- npx tsx /absolute/path/to/mcp-pagespeed/configs/pagespeed.ts
 ```
 
 Or add to `.mcp.json`:
@@ -23,12 +23,12 @@ Or add to `.mcp.json`:
 ```json
 {
   "mcpServers": {
-    "curl": {
+    "pagespeed": {
       "command": "npx",
-      "args": [
-        "-y",
-        "github:sixees/mcp-curl"
-      ]
+      "args": ["tsx", "/absolute/path/to/mcp-pagespeed/configs/pagespeed.ts"],
+      "env": {
+        "PAGESPEED_API_KEY": "your-api-key"
+      }
     }
   }
 }
@@ -44,216 +44,110 @@ Add to your config file:
 ```json
 {
   "mcpServers": {
-    "curl": {
+    "pagespeed": {
       "command": "npx",
-      "args": [
-        "-y",
-        "github:sixees/mcp-curl"
-      ]
+      "args": ["tsx", "/absolute/path/to/mcp-pagespeed/configs/pagespeed.ts"],
+      "env": {
+        "PAGESPEED_API_KEY": "your-api-key"
+      }
     }
   }
 }
 ```
 
-## Quick Start: Standalone
+### Other MCP Clients
+
+Run the server directly on stdio:
 
 ```bash
-# Stdio transport (default)
-npx -y github:sixees/mcp-curl
-
-# HTTP transport
-TRANSPORT=http PORT=3000 npx -y github:sixees/mcp-curl
-
-# HTTP with authentication
-TRANSPORT=http PORT=3000 MCP_AUTH_TOKEN=your-secret npx -y github:sixees/mcp-curl
+npx tsx configs/pagespeed.ts
 ```
 
-Or clone and build locally:
+Any MCP client that supports stdio transport can connect by spawning `npx tsx /path/to/configs/pagespeed.ts`.
 
-```bash
-git clone https://github.com/sixees/mcp-curl.git
-cd mcp-curl && npm install && npm run build
-npm start
-```
+## Tool: `analyze_pagespeed`
 
-## Tools
+Analyzes a URL with Google PageSpeed Insights API v5. Returns Lighthouse category scores and Core Web Vitals.
+Analysis typically takes 15-45 seconds.
 
-### `curl_execute`
+### Parameters
 
-Execute HTTP requests with structured parameters. Supports all common HTTP methods, authentication (basic, bearer),
-headers, form data, redirects, and timeouts.
+| Parameter       | Type   | Required | Description                              |
+|-----------------|--------|----------|------------------------------------------|
+| `url`           | string | yes      | The URL to analyze (publicly accessible) |
+| `strategy`      | string | no       | `MOBILE` (default) or `DESKTOP`          |
+| `filter_preset` | string | no       | `summary` (default), `scores`, `metrics` |
+
+### Filter Presets
+
+**scores** — Category scores as 0-100 integers:
 
 ```json
 {
-  "url": "https://api.github.com/users/octocat",
-  "bearer_token": "ghp_xxx",
-  "jq_filter": ".name,.email,.location"
+  "performance": 87,
+  "accessibility": 95,
+  "best_practices": 100,
+  "seo": 92
 }
 ```
 
-Responses exceeding `max_result_size` (default 500KB) are automatically saved to file. Use `jq_filter` to extract
-specific data before the size limit is checked.
-
-### `jq_query`
-
-Query saved JSON files without making new HTTP requests:
+**metrics** — Core Web Vitals as value/display pairs:
 
 ```json
 {
-  "filepath": "/path/to/saved_response.txt",
-  "jq_filter": ".users[0:5]"
+  "lcp": { "value": 1842.5, "display": "1.8 s" },
+  "fcp": { "value": 982, "display": "1.0 s" },
+  "cls": { "value": 0.003, "display": "0" },
+  "tbt": { "value": 150, "display": "150 ms" },
+  "tti": { "value": 2100, "display": "2.1 s" }
 }
 ```
 
-Files must be in the temp directory, `MCP_CURL_OUTPUT_DIR`, or current working directory.
+**summary** (default) — Both scores and metrics, plus `analyzed_url` and `strategy`.
 
-### jq_filter syntax
+### Example
 
-| Syntax         | Example            | Description                     |
-|----------------|--------------------|---------------------------------|
-| `.key`         | `.data`            | Object property                 |
-| `.[n]` or `.n` | `.[0]`, `.0`       | Array index (non-negative only) |
-| `.[n:m]`       | `.[0:10]`          | Array slice                     |
-| `.["key"]`     | `.["special-key"]` | Bracket notation                |
-| `.a,.b,.c`     | `.name,.email`     | Multiple paths (returns array)  |
-
-## Programmatic API
-
-Install as a library and build custom MCP servers:
-
-```bash
-npm install mcp-curl
+```json
+{
+  "url": "https://example.com",
+  "strategy": "MOBILE",
+  "filter_preset": "scores"
+}
 ```
 
-```typescript
-import { McpCurlServer } from "mcp-curl";
+## Tool: `jq_query`
 
-const server = new McpCurlServer()
-    .configure({
-        baseUrl: "https://api.example.com",
-        defaultHeaders: {"Authorization": `Bearer ${process.env.API_TOKEN}`},
-        defaultTimeout: 60,
-    })
-    .beforeRequest((ctx) => {
-        console.log(`${ctx.tool}: ${ctx.params.url}`);
-    })
-    .afterResponse((ctx) => {
-        console.log(`Response: ${ctx.response.length} bytes`);
-    });
-
-await server.start("stdio");
-```
-
-See the [library documentation](./docs/README.md) for the full API reference, including hooks, custom tools,
-instance utilities, and lifecycle management.
-
-## YAML Schema
-
-Define API endpoints declaratively and generate MCP tools:
-
-```typescript
-import { createApiServer } from "mcp-curl";
-
-const server = await createApiServer({
-    definitionPath: "./my-api.yaml",
-});
-await server.start("stdio");
-```
-
-```yaml
-apiVersion: "1.0"
-api:
-  name: my-api
-  baseUrl: https://api.example.com
-endpoints:
-  - id: list_items
-    path: /items
-    method: GET
-    title: List Items
-    description: Get all items
-    parameters:
-      - name: page
-        in: query
-        type: integer
-        required: false
-```
-
-See [YAML Schema Reference](./docs/api-schema.md) for the full specification including authentication, defaults,
-response filtering, and parameter types.
-
-### Fork Workflow
-
-If you fork this repo to build an API-specific server, use the `configs/` directory for your definitions:
-
-```bash
-# 1. Fork and clone
-git clone https://github.com/your-org/mcp-curl.git
-cd mcp-curl && npm install && npm run build
-
-# 2. Copy the template
-cp configs/example.yaml.template configs/my-api.yaml
-
-# 3. Edit your API definition
-# See docs/api-schema.md for the full YAML specification
-
-# 4. Create your entry point (configs/*.ts is gitignored)
-#    See configs/README.md for a full TypeScript template
-
-# 5. Run your server (using tsx to run the TS file directly)
-npx tsx configs/my-api.ts
-```
-
-Files in `configs/` matching `*.yaml`, `*.yml`, `*.ts`, `*.js` are **gitignored**, so pulling upstream changes
-(`git pull upstream main`) won't conflict with your application-specific configuration.
-
-Alternatively, install `mcp-curl` as an npm dependency in a separate project — see
-[Getting Started](./docs/getting-started.md).
-
-## Security Highlights
-
-- **SSRF protection** — blocks private IPs, cloud metadata endpoints, DNS rebinding services, internal TLDs
-- **DNS rebinding prevention** — DNS resolved before validation, cURL pinned to validated IP via `--resolve`
-- **Protocol whitelist** — only `http://` and `https://` allowed; `file://`, `ftp://`, etc. blocked
-- **Rate limiting** — 60 req/min per host, 300 req/min per client
-- **Input validation** — Zod schemas, CRLF injection prevention, `--data-raw`/`--form-string` to block `@` file reads
-- **No shell execution** — commands spawned via `spawn()` without shell; allowlist permits only `curl`
-- **File access control** — `jq_query` restricted to temp dir, `MCP_CURL_OUTPUT_DIR`, and cwd; symlinks resolved
-- **Resource limits** — 10MB response cap, 100MB global memory, 100ms jq parse timeout, 30s default request timeout
-- **Secure file permissions** — temp dirs 0o700, files 0o600 (owner-only)
+Query saved PageSpeed response files without making new API calls. Inherited from mcp-curl — useful when
+a large response triggers auto-save to file.
 
 ## Environment Variables
 
-| Variable                   | Description                                 |
-|----------------------------|---------------------------------------------|
-| `TRANSPORT`                | Transport mode: `stdio` (default) or `http` |
-| `PORT`                     | HTTP transport port (default: 3000)         |
-| `MCP_AUTH_TOKEN`           | Bearer token for HTTP transport auth        |
-| `MCP_CURL_OUTPUT_DIR`      | Default directory for saved responses       |
-| `MCP_CURL_ALLOW_LOCALHOST` | Set `true` to allow localhost requests      |
+| Variable            | Description                                          |
+|---------------------|------------------------------------------------------|
+| `PAGESPEED_API_KEY` | Google API key (optional, higher rate limits)        |
 
-## Documentation
+Without an API key, the PageSpeed API is rate-limited to ~25 queries per 100 seconds.
 
-| Guide                                         | Description                                   |
-|-----------------------------------------------|-----------------------------------------------|
-| [Library Overview](./docs/README.md)          | `McpCurlServer` class and YAML usage patterns |
-| [Getting Started](./docs/getting-started.md)  | Step-by-step setup guide                      |
-| [Configuration](./docs/configuration.md)      | All configuration options                     |
-| [Hooks](./docs/hooks.md)                      | Request/response interception                 |
-| [Custom Tools](./docs/custom-tools.md)        | Creating custom MCP tools                     |
-| [YAML Schema Reference](./docs/api-schema.md) | API definition format                         |
+## Security
 
-## Examples
+All security features from mcp-curl apply: SSRF protection, rate limiting, input validation, file access
+controls. See the [mcp-curl security documentation](https://github.com/sixees/mcp-curl#security-highlights)
+for details.
 
-Working example projects in [`examples/`](./examples/):
+The `curl_execute` tool is disabled — only the purpose-built `analyze_pagespeed` tool can make HTTP requests.
 
-- [`basic/`](./examples/basic/) — Minimal custom server
-- [`with-hooks/`](./examples/with-hooks/) — Authentication and logging hooks
-- [`from-yaml/`](./examples/from-yaml/) — Server from YAML API definition
+## Upstream
 
-## MCP Resources & Prompts
+This fork is based on [mcp-curl](https://github.com/sixees/mcp-curl). To pull upstream changes:
 
-- **Resource**: `curl://docs/api` — Built-in API documentation
-- **Prompts**: `api-test` (test an endpoint), `api-discovery` (explore a REST API)
+```bash
+git remote add upstream https://github.com/sixees/mcp-curl.git
+git fetch upstream
+git merge upstream/main --allow-unrelated-histories
+```
+
+See the [mcp-curl documentation](https://github.com/sixees/mcp-curl) for the full library API, YAML schema
+reference, hooks, custom tools, and configuration options.
 
 ## License
 

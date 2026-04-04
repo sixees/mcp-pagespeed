@@ -220,7 +220,9 @@ npx tsc --noEmit --skipLibCheck \
 #    Do NOT remove the inline protocol guard at lines ~124-144
 
 # 9. Re-run type-check after fix
-npx tsc --noEmit --skipLibCheck configs/pagespeed.ts
+npx tsc --noEmit --skipLibCheck \
+  --module nodenext --moduleResolution nodenext --target esnext \
+  --allowImportingTsExtensions configs/pagespeed.ts
 
 # 10. Full test suite
 npm test

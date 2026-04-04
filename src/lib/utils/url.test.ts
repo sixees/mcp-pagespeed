@@ -74,8 +74,8 @@ describe("httpOnlyUrl", () => {
         expect(schema.safeParse("file:///etc/passwd").success).toBe(false);
     });
 
-    it("rejects data: URLs — rejected by z.url() (not a WHATWG URL)", () => {
-        // data: is not a valid WHATWG URL so z.url() rejects it before .refine() runs
+    it("rejects data: URLs — valid WHATWG URL but rejected by .refine()", () => {
+        // data: is a valid WHATWG URL so z.url() accepts it; .refine() rejects the non-http/https scheme
         expect(schema.safeParse("data:text/html,<h1>test</h1>").success).toBe(false);
     });
 
@@ -84,8 +84,8 @@ describe("httpOnlyUrl", () => {
         expect(schema.safeParse("not-a-url").success).toBe(false);
     });
 
-    it("rejects javascript: strings — rejected by z.url() (not a WHATWG URL)", () => {
-        // javascript: is not a valid WHATWG URL; z.url() rejects it before .refine() runs
+    it("rejects javascript: URLs — valid WHATWG URL but rejected by .refine()", () => {
+        // javascript: is a valid WHATWG URL so z.url() accepts it; .refine() rejects the non-http/https scheme
         expect(schema.safeParse("javascript:alert(1)").success).toBe(false);
     });
 

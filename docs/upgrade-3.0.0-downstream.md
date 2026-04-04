@@ -108,7 +108,7 @@ url: z.url()
 
 // CORRECT — http/https only
 url: z.url().refine(
-    (url) => ["http", "https"].includes(url.split(":")[0].toLowerCase()),
+    (url) => ["http:", "https:"].includes(new URL(url).protocol),
     { message: "URL must use http or https scheme" }
 )
 ```

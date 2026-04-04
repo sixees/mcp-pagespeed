@@ -17,6 +17,10 @@ describe("api-discovery prompt — URL scheme allowlist", () => {
         expect(apiDiscoveryBaseUrlSchema.safeParse("javascript:alert(1)").success).toBe(false);
     });
 
+    it("rejects data: URLs", () => {
+        expect(apiDiscoveryBaseUrlSchema.safeParse("data:text/plain;base64,SGVsbG8=").success).toBe(false);
+    });
+
     it("accepts http:// URLs", () => {
         expect(apiDiscoveryBaseUrlSchema.safeParse("http://api.example.com").success).toBe(true);
     });

@@ -183,3 +183,20 @@ All 5 threads replied to and resolved. Commit: `d7dcb18`.
 - `docs/plans/2026-04-04-feat-upgrade-upstream-mcp-curl-3-0-0-plan.md`
 - `docs/work/handoff-feat-upgrade-upstream-3.0.0.md`
 - `src/lib/prompts/api-test.test.ts`
+
+---
+
+## PR Review Comments Addressed — 2026-04-04 (second pass)
+
+### Changes Made
+
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| `configs/pagespeed.ts:116` — typed handler constant + remove manual URL validation | @gemini-code-assist | False positive (both points) | No change: `generateInputSchema()` returns generic `ZodObject<ZodRawShape>` so typed constant adds no type safety; manual guard is intentional defence-in-depth before a 15–45s API call |
+| `plan.md:51` — update version refs from `3.0.1` to `3.0.2` | @coderabbitai | False positive | No change: plan has `status: completed`; it's a historical record of intent; version bump was post-plan |
+| `url.ts:31` — hoist protocol array to module-level `Set` constant | @coderabbitai | Won't apply | No change: reviewer labels it "Optional" and acknowledges correctness; n=2 makes `Array.includes` vs `Set.has` a zero-impact distinction |
+
+All 3 threads replied to and resolved. No code changes.
+
+### Files Modified
+- `docs/work/handoff-feat-upgrade-upstream-3.0.0.md`

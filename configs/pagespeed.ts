@@ -113,7 +113,7 @@ try {
         openWorldHint: true,
       },
     },
-    async (args) => {
+    async (args, _extra) => {
       const { url, strategy, filter_preset } = args as {
         url: string;
         strategy?: string;

@@ -1,20 +1,34 @@
-// src/lib/server/schemas.ts
+// src/lib/utils/url.ts
 import { z } from "zod";
-var CurlExecuteSchema = z.object({
-  url: z.string().url("Must be a valid URL").refine(
+function resolveBaseUrl(baseUrl, path) {
+  const base = baseUrl.replace(/\/$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
+}
+function httpOnlyUrl(description) {
+  return z.url().refine(
     (url) => {
-      const scheme = url.split(":")[0].toLowerCase();
-      return ["http", "https"].includes(scheme);
+      try {
+        return ["http:", "https:"].includes(new URL(url).protocol);
+      } catch {
+        return false;
+      }
     },
     { message: "URL must use http or https scheme" }
-  ).describe("The URL to request"),
-  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]).optional().describe("HTTP method (defaults to GET, or POST if data is provided)"),
-  headers: z.record(z.string()).optional().describe('HTTP headers as key-value pairs (e.g., {"Content-Type": "application/json"})'),
-  data: z.string().optional().describe("Request body data (for POST/PUT/PATCH). Use JSON string for JSON payloads"),
-  form: z.record(z.string()).optional().describe("Form data as key-value pairs (uses multipart/form-data)"),
-  follow_redirects: z.boolean().default(true).describe("Follow HTTP redirects (default: true)"),
-  max_redirects: z.number().int().min(0).max(50).optional().describe("Maximum number of redirects to follow"),
-  insecure: z.boolean().default(false).describe("Skip SSL certificate verification (default: false)"),
+  ).describe(description);
+}
+
+// src/lib/server/schemas.ts
+import { z as z2 } from "zod";
+var CurlExecuteSchema = z2.object({
+  url: httpOnlyUrl("The URL to request"),
+  method: z2.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]).optional().describe("HTTP method (defaults to GET, or POST if data is provided)"),
+  headers: z2.record(z2.string(), z2.string()).optional().describe('HTTP headers as key-value pairs (e.g., {"Content-Type": "application/json"})'),
+  data: z2.string().optional().describe("Request body data (for POST/PUT/PATCH). Use JSON string for JSON payloads"),
+  form: z2.record(z2.string(), z2.string()).optional().describe("Form data as key-value pairs (uses multipart/form-data)"),
+  follow_redirects: z2.boolean().default(true).describe("Follow HTTP redirects (default: true)"),
+  max_redirects: z2.number().int().min(0).max(50).optional().describe("Maximum number of redirects to follow"),
+  insecure: z2.boolean().default(false).describe("Skip SSL certificate verification (default: false)"),
   /**
    * Request timeout in seconds.
    * Optional - if not provided, defaults are applied in this order:
@@ -24,25 +38,25 @@ var CurlExecuteSchema = z.object({
    * Note: This field intentionally has no .default() to distinguish between
    * "user explicitly passed 30" vs "user didn't provide a value".
    */
-  timeout: z.number().int().min(1).max(300).optional().describe("Request timeout in seconds (default: 30, max: 300)"),
-  user_agent: z.string().optional().describe("Custom User-Agent header. If not set, a browser-like User-Agent is sent automatically. Set to empty string to disable."),
-  basic_auth: z.string().optional().describe("Basic authentication in format 'username:password'"),
-  bearer_token: z.string().optional().describe("Bearer token for Authorization header"),
-  verbose: z.boolean().default(false).describe("Include verbose output with request/response details"),
-  include_headers: z.boolean().default(false).describe("Include response headers in output"),
-  compressed: z.boolean().default(true).describe("Request compressed response and automatically decompress"),
-  include_metadata: z.boolean().default(false).describe("Wrap response in JSON with metadata (exit code, success status)"),
-  jq_filter: z.string().optional().describe('JSON path filter to extract specific data. Supports: .key, .[n] or .n (non-negative array index), .[n:m] (slice), .["key"] (bracket notation), .a,.b (multiple comma-separated paths return array, max 20). Negative indices not supported. Applied after response, before max_result_size check.'),
-  max_result_size: z.number().int().min(1e3).max(1e6).optional().describe("Max bytes to return inline (default: 500KB, max: 1MB). Larger responses auto-save to temp file"),
-  save_to_file: z.boolean().optional().describe("Force save response to temp file. Returns filepath instead of content"),
-  output_dir: z.string().optional().describe("Directory to save response files (must exist and be writable). Overrides MCP_CURL_OUTPUT_DIR env var. Falls back to system temp directory.")
+  timeout: z2.number().int().min(1).max(300).optional().describe("Request timeout in seconds (default: 30, max: 300)"),
+  user_agent: z2.string().optional().describe("Custom User-Agent header. If not set, a browser-like User-Agent is sent automatically. Set to empty string to disable."),
+  basic_auth: z2.string().optional().describe("Basic authentication in format 'username:password'"),
+  bearer_token: z2.string().optional().describe("Bearer token for Authorization header"),
+  verbose: z2.boolean().default(false).describe("Include verbose output with request/response details"),
+  include_headers: z2.boolean().default(false).describe("Include response headers in output"),
+  compressed: z2.boolean().default(true).describe("Request compressed response and automatically decompress"),
+  include_metadata: z2.boolean().default(false).describe("Wrap response in JSON with metadata (exit code, success status)"),
+  jq_filter: z2.string().optional().describe('JSON path filter to extract specific data. Supports: .key, .[n] or .n (non-negative array index), .[n:m] (slice), .["key"] (bracket notation), .a,.b (multiple comma-separated paths return array, max 20). Negative indices not supported. Applied after response, before max_result_size check.'),
+  max_result_size: z2.number().int().min(1e3).max(1e6).optional().describe("Max bytes to return inline (default: 500KB, max: 1MB). Larger responses auto-save to temp file"),
+  save_to_file: z2.boolean().optional().describe("Force save response to temp file. Returns filepath instead of content"),
+  output_dir: z2.string().optional().describe("Directory to save response files (must exist and be writable). Overrides MCP_CURL_OUTPUT_DIR env var. Falls back to system temp directory.")
 });
-var JqQuerySchema = z.object({
-  filepath: z.string().describe("Path to a JSON file to query. Must be in temp directory, MCP_CURL_OUTPUT_DIR, or current working directory."),
-  jq_filter: z.string().describe('JSON path filter expression. Supports: .key, .[n] or .n (non-negative array index), .[n:m] (slice), .["key"] (bracket notation), .a,.b (multiple comma-separated paths return array, max 20). Negative indices not supported.'),
-  max_result_size: z.number().int().min(1e3).max(1e6).optional().describe("Max bytes to return inline (default: 500KB, max: 1MB). Larger results auto-save to file"),
-  save_to_file: z.boolean().optional().describe("Force save result to file. Returns filepath instead of content"),
-  output_dir: z.string().optional().describe("Directory to save result files (must exist and be writable)")
+var JqQuerySchema = z2.object({
+  filepath: z2.string().describe("Path to a JSON file to query. Must be in temp directory, MCP_CURL_OUTPUT_DIR, or current working directory."),
+  jq_filter: z2.string().describe('JSON path filter expression. Supports: .key, .[n] or .n (non-negative array index), .[n:m] (slice), .["key"] (bracket notation), .a,.b (multiple comma-separated paths return array, max 20). Negative indices not supported.'),
+  max_result_size: z2.number().int().min(1e3).max(1e6).optional().describe("Max bytes to return inline (default: 500KB, max: 1MB). Larger results auto-save to file"),
+  save_to_file: z2.boolean().optional().describe("Force save result to file. Returns filepath instead of content"),
+  output_dir: z2.string().optional().describe("Directory to save result files (must exist and be writable)")
 });
 
 // src/lib/config/limits.ts
@@ -84,7 +98,7 @@ var SERVER = {
   /** MCP server name for protocol identification */
   NAME: "curl-mcp-server",
   /** Server version from package.json */
-  VERSION: true ? "2.0.1" : "0.0.0"
+  VERSION: true ? "3.0.2" : "0.0.0"
 };
 
 // src/lib/config/session.ts
@@ -519,13 +533,6 @@ function createFileError(filepath, reason) {
 }
 function createConfigError(configName, value, reason) {
   return new Error(`Invalid ${configName} value "${value}": ${reason}.`);
-}
-
-// src/lib/utils/url.ts
-function resolveBaseUrl(baseUrl, path) {
-  const base = baseUrl.replace(/\/$/, "");
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${normalizedPath}`;
 }
 
 // src/lib/files/output-dir.ts
@@ -1750,6 +1757,7 @@ export {
   ENV,
   getErrorMessage,
   resolveBaseUrl,
+  httpOnlyUrl,
   SESSION,
   startRateLimitCleanup,
   stopRateLimitCleanup,

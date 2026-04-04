@@ -1,5 +1,7 @@
 # Hooks Guide
 
+> **Library reference** — This guide documents the hooks API from the underlying [mcp-curl](https://github.com/sixees/mcp-curl) library. The PageSpeed server does not currently use hooks — all request logic is inside the `analyze_pagespeed` tool handler. Refer here if you need to add cross-cutting concerns like logging, metrics, or request validation.
+
 Hooks allow you to intercept and modify requests, log responses, and handle errors. They're the primary extension point
 for adding custom behavior to mcp-curl.
 

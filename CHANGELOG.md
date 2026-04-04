@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] - 2026-04-04
+
+### Changed
+
+- **`httpOnlyUrl()` scheme check hardened** — replaced `url.split(":")[0]` heuristic with `new URL(url).protocol`, consistent with the SSRF layer; eliminates an implicit dependency on Zod v4's URL normalisation order
+- **URL scheme validation centralised** — `CurlExecuteSchema.url` and `ApiInfoSchema.baseUrl` now use `httpOnlyUrl()` from `utils/url.ts` (single source of truth); previously each had an inline copy of the same `z.url().refine()` logic
+- **`httpOnlyUrl()` unit tests added** — 9 new test cases in `url.test.ts` covering valid schemes, blocked schemes (`ftp://`, `file://`, `data:`, `javascript:`), and invalid URLs; documents which layer rejects each case
+
+## [3.0.1] - 2026-04-04
+
+### Changed
+
+- **Upgraded base to mcp-curl 3.0.1** — merged upstream breaking changes:
+  - Zod `^3.23.8` → `^4.0.0`: `z.record()` now requires two type arguments; `z.string().url()` replaced by `z.url()` with http/https `.refine()`
+  - `@modelcontextprotocol/sdk` `^1.12.0` → `^1.29.0`: tool handler `extra` parameter is now required (non-optional)
+  - URL validation error code changed from `invalid_string` to `invalid_format`
+- **`configs/pagespeed.ts` handler updated** — `async (args)` → `async (args, _extra)` to match SDK 1.29.0 type requirements
+
 ## [2.0.1] - 2026-02-17
 
 ### Security

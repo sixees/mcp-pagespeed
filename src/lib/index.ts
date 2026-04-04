@@ -27,6 +27,9 @@ export type {
     JqQueryInput,
 } from "./types/public.js";
 
+// URL validation helper
+export { httpOnlyUrl } from "./utils/url.js";
+
 // Server schemas (Zod schemas for input validation)
 export { CurlExecuteSchema, JqQuerySchema } from "./server/schemas.js";
 

@@ -3,6 +3,10 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { httpOnlyUrl } from "../utils/url.js";
+
+/** URL schema restricted to http/https schemes. Exported for testing. */
+export const apiTestUrlSchema = httpOnlyUrl("The API endpoint URL to test");
 
 /**
  * Registers the api-test prompt on the MCP server.
@@ -15,7 +19,7 @@ export function registerApiTestPrompt(server: McpServer): void {
             title: "API Testing",
             description: "Test an API endpoint and analyze the response",
             argsSchema: {
-                url: z.string().url().describe("The API endpoint URL to test"),
+                url: apiTestUrlSchema,
                 method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]).optional().describe("HTTP method (default: GET)"),
                 description: z.string().optional().describe("What this API endpoint does"),
             },

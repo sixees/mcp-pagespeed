@@ -1,6 +1,3 @@
-// src/lib/server/schemas.ts
-import { z as z2 } from "zod";
-
 // src/lib/utils/url.ts
 import { z } from "zod";
 function resolveBaseUrl(baseUrl, path) {
@@ -22,6 +19,7 @@ function httpOnlyUrl(description) {
 }
 
 // src/lib/server/schemas.ts
+import { z as z2 } from "zod";
 var CurlExecuteSchema = z2.object({
   url: httpOnlyUrl("The URL to request"),
   method: z2.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]).optional().describe("HTTP method (defaults to GET, or POST if data is provided)"),

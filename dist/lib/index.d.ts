@@ -1,7 +1,14 @@
-export { A as AfterResponseHook, B as BeforeRequestHook, a as BeforeRequestResult, C as CreateApiServerOptions, b as CustomToolMeta, E as ExecuteRequestParams, H as HookContext, I as InstanceUtilities, M as McpCurlConfig, c as McpCurlServer, O as OnErrorHook, T as TransportMode, d as createApiServer, e as createApiServerSync, f as createInstanceUtilities, g as executeJqQuery } from '../api-server-DKRMs05f.js';
-export { C as CurlExecuteInput, l as CurlExecuteSchema, J as JqQueryInput, m as JqQuerySchema, n as executeCurlRequest } from '../generator-D2k1xoIf.js';
+export { A as AfterResponseHook, B as BeforeRequestHook, a as BeforeRequestResult, C as CreateApiServerOptions, b as CustomToolMeta, E as ExecuteRequestParams, H as HookContext, I as InstanceUtilities, M as McpCurlConfig, c as McpCurlServer, O as OnErrorHook, T as TransportMode, d as createApiServer, e as createApiServerSync, f as createInstanceUtilities, g as executeJqQuery } from '../api-server-BlwTMOjA.js';
+import { z } from 'zod';
+export { C as CurlExecuteInput, l as CurlExecuteSchema, J as JqQueryInput, m as JqQuerySchema, n as executeCurlRequest } from '../generator-Ctr639v0.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import 'zod';
+
+/**
+ * Zod schema for a URL restricted to http/https schemes.
+ * z.url() in Zod v4 accepts any WHATWG-valid URL (including javascript:, data:, ftp://).
+ * Uses new URL().protocol (consistent with the SSRF layer) for scheme enforcement.
+ */
+declare function httpOnlyUrl(description: string): z.ZodURL;
 
 /**
  * Creates a new MCP server instance with the configured name and version.
@@ -18,4 +25,4 @@ declare function registerAllResources(server: McpServer): void;
  */
 declare function registerAllPrompts(server: McpServer): void;
 
-export { createServer, registerAllPrompts, registerAllResources };
+export { createServer, httpOnlyUrl, registerAllPrompts, registerAllResources };

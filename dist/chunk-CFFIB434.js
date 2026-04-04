@@ -1,8 +1,9 @@
 import {
   applyDefaultHeaders,
   executeCurlRequest,
+  httpOnlyUrl,
   resolveBaseUrl
-} from "./chunk-PH7FLIFM.js";
+} from "./chunk-ZDY2LZZK.js";
 
 // src/lib/schema/validator.ts
 import { z } from "zod";
@@ -56,13 +57,11 @@ var ApiInfoSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
   version: z.string().min(1),
-  baseUrl: z.string().url({
-    message: "Base URL must be a valid URL"
-  })
+  baseUrl: httpOnlyUrl("Base URL (must use http or https)")
 });
 var ApiDefaultsSchema = z.object({
   timeout: z.number().int().min(1).max(300).optional(),
-  headers: z.record(z.string()).optional()
+  headers: z.record(z.string(), z.string()).optional()
 }).optional();
 var ApiSchemaValidator = z.object({
   apiVersion: z.literal("1.0"),
@@ -196,29 +195,27 @@ function generateInputSchema(endpoint) {
   }
   if (endpoint.response?.filterPresets?.length) {
     const presetNames = endpoint.response.filterPresets.map((p) => p.name);
-    if (presetNames.length === 1) {
-      shape.filter_preset = z2.literal(presetNames[0]).optional().describe("Apply a predefined response filter");
-    } else {
-      shape.filter_preset = z2.enum(presetNames).optional().describe("Apply a predefined response filter");
-    }
+    shape.filter_preset = buildStringEnum(presetNames).optional().describe("Apply a predefined response filter");
   }
   return z2.object(shape);
+}
+function buildStringEnum(values) {
+  if (values.length === 1) return z2.literal(values[0]);
+  return z2.enum(values);
+}
+function buildNumberUnion(values) {
+  if (values.length === 1) return z2.literal(values[0]);
+  return z2.union(
+    values.map((v) => z2.literal(v))
+  );
 }
 function createParamSchema(param) {
   if (param.enum && param.enum.length > 0) {
     const firstValue = param.enum[0];
     if (typeof firstValue === "string") {
-      if (param.enum.length === 1) {
-        return z2.literal(firstValue);
-      }
-      return z2.enum(param.enum);
+      return buildStringEnum(param.enum);
     } else {
-      if (param.enum.length === 1) {
-        return z2.literal(firstValue);
-      }
-      return z2.union(
-        param.enum.map((v) => z2.literal(v))
-      );
+      return buildNumberUnion(param.enum);
     }
   }
   switch (param.type) {

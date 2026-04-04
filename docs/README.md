@@ -1,135 +1,91 @@
-# mcp-curl Library Documentation
+# PageSpeed Insights MCP Server
 
-mcp-curl is an MCP (Model Context Protocol) server that enables LLMs to make HTTP requests via cURL. It provides a
-secure, configurable way to expose HTTP capabilities to AI assistants like Claude.
+An MCP (Model Context Protocol) server that exposes Google PageSpeed Insights analysis to AI assistants like Claude. Built as a fork of [mcp-curl](https://github.com/sixees/mcp-curl).
 
-## Two Usage Patterns
+## What It Does
 
-### 1. McpCurlServer Class
+Connects an AI assistant to the [Google PageSpeed Insights API v5](https://developers.google.com/speed/docs/insights/v5/get-started), returning Lighthouse scores and Core Web Vitals for any public URL.
 
-Use the `McpCurlServer` class for full control with a fluent builder API:
+## Available Tools
 
-```typescript
-import {McpCurlServer} from "mcp-curl";
+| Tool | Description |
+|---|---|
+| `analyze_pagespeed` | Run Lighthouse analysis on a URL — scores, Core Web Vitals, or both |
+| `jq_query` | Query previously saved JSON response files (inherited from mcp-curl) |
 
-const server = new McpCurlServer()
-    .configure({
-        baseUrl: "https://api.example.com",
-        defaultHeaders: {"Accept": "application/json"},
-    })
-    .beforeRequest((ctx) => {
-        if (ctx.tool !== "curl_execute") return;
+`curl_execute` is intentionally disabled — all HTTP access is through `analyze_pagespeed`.
 
-        const token = process.env.API_TOKEN;
-        if (!token) return;
+## Quick Setup
 
-        return {
-            params: {
-                headers: {
-                    ...(ctx.params.headers ?? {}),
-                    "Authorization": `Bearer ${token}`,
-                },
-            },
-        };
-    });
-
-await server.start("stdio");
-```
-
-### 2. YAML Schema Definitions
-
-Use `createApiServer()` to generate tools from a YAML API definition:
-
-```typescript
-import {createApiServer} from "mcp-curl";
-
-const server = await createApiServer({
-    definitionPath: "./my-api.yaml",
-});
-await server.start("stdio");
-```
-
-## Installation
+**1. Install dependencies:**
 
 ```bash
-npm install mcp-curl
+npm install
 ```
 
-## Quick Start
+**2. Set your API key** (strongly recommended — without it the anonymous quota is exhausted quickly):
 
-Minimal server (5 lines):
-
-```typescript
-import {McpCurlServer} from "mcp-curl";
-
-const server = new McpCurlServer()
-    .configure({baseUrl: "https://api.example.com"});
-
-await server.start("stdio");
+```bash
+export PAGESPEED_API_KEY=your-google-api-key
 ```
+
+Get a key at [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials).
+
+**3. Run the server:**
+
+```bash
+npx tsx configs/pagespeed.ts
+```
+
+**4. Connect your AI client** — see [Getting Started](./getting-started.md).
+
+## analyze_pagespeed Tool
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `url` | string | Yes | The public URL to analyze |
+| `strategy` | `MOBILE` \| `DESKTOP` | No | Analysis strategy (default: `MOBILE`) |
+| `filter_preset` | `scores` \| `metrics` \| `summary` | No | Output format (default: `summary`) |
+
+### Output Formats
+
+**`scores`** — Category scores as integers 0–100:
+```json
+{
+  "performance": 100,
+  "accessibility": 96,
+  "best_practices": 96,
+  "seo": 40
+}
+```
+
+**`metrics`** — Core Web Vitals with raw and display values:
+```json
+{
+  "lcp": { "value": 800, "display": "0.8 s" },
+  "fcp": { "value": 800, "display": "0.8 s" },
+  "cls": { "value": 0, "display": "0" },
+  "tbt": { "value": 0, "display": "0 ms" },
+  "tti": { "value": 800, "display": "0.8 s" }
+}
+```
+
+**`summary`** (default) — Scores + metrics + analyzed URL + strategy.
 
 ## Guides
 
-- [Getting Started](./getting-started.md) - Step-by-step setup guide
-- [Configuration](./configuration.md) - All configuration options
-- [Hooks](./hooks.md) - Request/response interception
-- [Custom Tools](./custom-tools.md) - Creating custom MCP tools
-- [YAML Schema Reference](./api-schema.md) - API definition format
+- [Getting Started](./getting-started.md) — Connecting Claude Desktop, Claude Code, and other clients
+- [Configuration](./configuration.md) — API key, strategy, and output options
+- [YAML Schema Reference](./api-schema.md) — `pagespeed.yaml` configuration format
+- [Custom Tools](./custom-tools.md) — Extending the server with additional tools (library reference)
+- [Hooks](./hooks.md) — Request/response interception (library reference)
 
-## Examples
+## Architecture
 
-Working example projects in the `examples/` directory:
-
-- [`examples/basic/`](../examples/basic/) - Minimal server setup
-- [`examples/with-hooks/`](../examples/with-hooks/) - Authentication and logging hooks
-- [`examples/from-yaml/`](../examples/from-yaml/) - Server from YAML definition
-
-## TypeScript Types
-
-All public types are exported from the main package:
-
-```typescript
-import type {
-    // Configuration
-    McpCurlConfig,
-    TransportMode,
-
-    // Hooks
-    HookContext,
-    BeforeRequestResult,
-    BeforeRequestHook,
-    AfterResponseHook,
-    OnErrorHook,
-
-    // Tool inputs
-    CurlExecuteInput,
-    JqQueryInput,
-
-    // Schema types
-    ApiSchema,
-    EndpointDefinition,
-    AuthConfig,
-
-    // API server
-    CreateApiServerOptions,
-    CustomToolMeta,
-} from "mcp-curl";
+```text
+configs/
+├── pagespeed.ts    # Entry point — McpCurlServer + custom analyze_pagespeed tool
+└── pagespeed.yaml  # API config — baseUrl, auth, defaults, input schema generation
 ```
 
-## Subpath Exports
-
-For advanced use cases, additional exports are available:
-
-```typescript
-// Lower-level utilities
-import {createServer, CurlExecuteSchema} from "mcp-curl/lib";
-
-// Schema loading and generation
-import {loadApiSchema, generateToolDefinitions} from "mcp-curl/schema";
-```
-
-## Links
-
-- [Main README](../README.md) - CLI usage and full documentation
-- [GitHub Repository](https://github.com/sixees/mcp-curl)
-- [MCP Protocol](https://modelcontextprotocol.io/)
+See [CLAUDE.md](../CLAUDE.md) for full architecture notes.

@@ -1,5 +1,7 @@
 # Custom Tools Guide
 
+> **Library reference** — This guide documents the `registerCustomTool()` API from the underlying [mcp-curl](https://github.com/sixees/mcp-curl) library. The PageSpeed server uses this API to register `analyze_pagespeed`. Refer here when extending the server with additional tools.
+
 This guide explains how to create custom MCP tools using `registerCustomTool()`.
 
 ## Overview

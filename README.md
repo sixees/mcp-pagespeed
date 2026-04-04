@@ -143,7 +143,7 @@ This fork is based on [mcp-curl](https://github.com/sixees/mcp-curl). To pull up
 ```bash
 git remote add upstream https://github.com/sixees/mcp-curl.git
 git fetch upstream
-git merge upstream/main
+git merge upstream/main --allow-unrelated-histories
 ```
 
 See the [mcp-curl documentation](https://github.com/sixees/mcp-curl) for the full library API, YAML schema

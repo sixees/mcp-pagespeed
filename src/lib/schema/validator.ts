@@ -2,7 +2,9 @@
 // Zod schema for validating API definitions loaded from YAML
 
 import { z } from "zod";
+import type { ZodIssue } from "zod";
 import type { ApiSchema } from "./types.js";
+import { httpOnlyUrl } from "../utils/url.js";
 
 /**
  * Regex for valid endpoint IDs.
@@ -86,9 +88,7 @@ const ApiInfoSchema = z.object({
     title: z.string().min(1),
     description: z.string().min(1),
     version: z.string().min(1),
-    baseUrl: z.string().url({
-        message: "Base URL must be a valid URL",
-    }),
+    baseUrl: httpOnlyUrl("Base URL (must use http or https)"),
 });
 
 /**
@@ -96,7 +96,7 @@ const ApiInfoSchema = z.object({
  */
 const ApiDefaultsSchema = z.object({
     timeout: z.number().int().min(1).max(300).optional(),
-    headers: z.record(z.string()).optional(),
+    headers: z.record(z.string(), z.string()).optional(),
 }).optional();
 
 /**
@@ -118,7 +118,7 @@ export const ApiSchemaValidator = z.object({
 export class ApiSchemaValidationError extends Error {
     constructor(
         message: string,
-        public readonly issues: z.ZodIssue[]
+        public readonly issues: ZodIssue[]
     ) {
         super(message);
         this.name = "ApiSchemaValidationError";

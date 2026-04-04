@@ -39,6 +39,7 @@ See [upstream docs](https://github.com/sixees/mcp-curl) for the full library API
 - TypeScript post-processing instead of jq because the built-in jq engine can't do object construction or arithmetic
 - `Record<string, any>` for API response types — external API with version-dependent shape; `?.`/`??` handle missing fields at runtime
 - YAML schema used for config and input schema generation, not for tool handler generation
+- API error responses (rate limits, auth failures, bad URLs) are detected via `data.error` before checking for `lighthouseResult`, so Google's error code and message are surfaced directly to the caller
 
 ## Tools
 

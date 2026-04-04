@@ -200,3 +200,23 @@ All 3 threads replied to and resolved. No code changes.
 
 ### Files Modified
 - `docs/work/handoff-feat-upgrade-upstream-3.0.0.md`
+
+---
+
+## PR Review Comments Addressed — 2026-04-04 (third pass)
+
+### Changes Made
+
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| `upgrade-3.0.0-downstream.md:120` — `import { httpOnlyUrl } from "mcp-curl/lib"` would fail | @coderabbitai | Fix needed | Added `export { httpOnlyUrl } from "./utils/url.js"` to `src/lib/index.ts`; rebuilt `dist/`; commit `279ac2e` |
+| `generator.ts:53` — `z.ZodRawShape` return type incompatible with Zod v4 | @coderabbitai | False positive | `ZodRawShape` is a valid public type alias for `core.$ZodShape` in installed Zod v4; `tsc --noEmit` exits clean |
+| `generator.ts:buildStringEnum` — missing empty-array guard | @coderabbitai | False positive | Private helper; all call sites already guard; CLAUDE.md: don't add validation for scenarios that can't happen |
+| `generator.ts:buildNumberUnion` — missing empty-array guard | @coderabbitai | False positive | Same reasoning as `buildStringEnum` |
+
+All 4 threads replied to and resolved.
+
+### Files Modified
+- `src/lib/index.ts` — added `httpOnlyUrl` export
+- `dist/` — rebuilt
+- `docs/work/handoff-feat-upgrade-upstream-3.0.0.md`

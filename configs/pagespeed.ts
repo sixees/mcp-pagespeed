@@ -184,6 +184,30 @@ try {
         return result; // not JSON (or auto-saved to file), return as-is
       }
 
+      // Surface API-level errors (rate limits, auth failures, etc.) clearly
+      if (data.error) {
+        const code = data.error.code ?? 0;
+        const message = data.error.message ?? "Unknown API error";
+        const isRateLimit =
+          data.error.status === "RESOURCE_EXHAUSTED" ||
+          (data.error.errors ?? []).some(
+            (e: Record<string, string>) => e.reason === "rateLimitExceeded",
+          );
+        const hint = isRateLimit
+          ? " Set PAGESPEED_API_KEY to use a higher quota."
+          : "";
+        console.error(`pagespeed: API error ${code}: ${message}`);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error: PageSpeed API returned ${code}: ${message}${hint}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
       const lighthouse = data.lighthouseResult;
       if (!lighthouse) {
         console.error("pagespeed: no lighthouseResult in API response");

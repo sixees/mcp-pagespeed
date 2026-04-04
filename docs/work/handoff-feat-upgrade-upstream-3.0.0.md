@@ -65,7 +65,7 @@ New test files from upstream: `api-discovery.test.ts`, `api-test.test.ts`, `sche
 
 - **`CurlExecuteSchema.url` uses inline `.refine()` not `httpOnlyUrl()`** — the upstream chose not to replace the inline refine chain with the `httpOnlyUrl()` helper in `schemas.ts`. The security semantics are identical (both enforce http/https), but the approach differs from what the prompt files do. This is upstream's choice, not a fork issue.
 
-- **`tsc --noEmit configs/pagespeed.ts` without module flags fails** — running tsc without `--module nodenext --moduleResolution nodenext` produces false errors (module resolution, top-level await). The correct command is `npx tsc --noEmit --skipLibCheck --module nodenext --moduleResolution nodenext --target esnext --allowImportingTsExtensions configs/pagespeed.ts`. The plan should be updated to include these flags. The project tsconfig (`npx tsc --noEmit --skipLibCheck --project tsconfig.json`) passes cleanly. The configs/ file is not in scope of the project tsconfig, but the npm build and smoke test confirm it works at runtime.
+- **`tsc --noEmit configs/pagespeed.ts` requires ESM module flags** — running tsc without `--module nodenext --moduleResolution nodenext` produces false errors (module resolution, top-level await, import.meta). The correct command is: `npx tsc --noEmit --skipLibCheck --module nodenext --moduleResolution nodenext --target esnext --allowImportingTsExtensions configs/pagespeed.ts`. The plan has been updated with these flags. The project tsconfig (`npx tsc --noEmit --skipLibCheck --project tsconfig.json`) passes cleanly.
 
 - **`npm audit fix` changed 9 packages** — the audit fix is recorded in the regenerated `package-lock.json` but not in `package.json`. Reviewer should check that no direct dependencies were unintentionally upgraded.
 
@@ -75,7 +75,7 @@ New test files from upstream: `api-discovery.test.ts`, `api-test.test.ts`, `sche
 
 ## Known issues and limitations
 
-1. **Plan's `tsc` command needs updated flags** — the plan documents `npx tsc --noEmit --skipLibCheck configs/pagespeed.ts` but this command fails without module system flags. The correct invocation with the right flags passes cleanly. The plan file should be updated with the corrected command. This is a documentation gap, not a code issue.
+1. ~~Plan's `tsc` command needed ESM module flags~~ — **resolved**. Plan and handoff updated with the correct `--module nodenext --moduleResolution nodenext --target esnext --allowImportingTsExtensions` flags.
 
 2. **`dist/` in the merge commit contains upstream's 3.0.1 compiled output** — the merge commit includes the old `dist/` from the upstream (later replaced when `rm -rf dist/ && npm run build` regenerated it). The PR contains both the merge commit (with old dist/) and the final state (with fresh dist/). A reviewer should look at the latest state, not the intermediate merge commit.
 
@@ -104,7 +104,6 @@ New test files from upstream: `api-discovery.test.ts`, `api-test.test.ts`, `sche
 
 ## Follow-up work
 
-- [ ] Update plan documentation: add correct `tsc` flags for type-checking `configs/pagespeed.ts`
 - [ ] Review `docs/todos/cache-utilities.md` and `docs/todos/configure-unknown-fields.md` — these may be completed work items that should be deleted
 - [ ] Consider forwarding `_extra` to `executeRequest` for future HTTP transport session support
 

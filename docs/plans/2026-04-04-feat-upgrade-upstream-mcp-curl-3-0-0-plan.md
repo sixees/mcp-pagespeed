@@ -110,8 +110,13 @@ The `_extra` parameter does not need an explicit type annotation — TypeScript 
 The root `tsconfig.json` only covers `src/**/*`. TypeScript errors in `configs/pagespeed.ts` are **not** caught by `npm run build`. A passing build does **not** mean `configs/pagespeed.ts` is type-correct. The separate type-check below is required before the upgrade is considered complete:
 
 ```bash
-npx tsc --noEmit --skipLibCheck configs/pagespeed.ts
+# configs/pagespeed.ts uses ESM (import.meta, top-level await) — tsc needs explicit module flags:
+npx tsc --noEmit --skipLibCheck \
+  --module nodenext --moduleResolution nodenext --target esnext \
+  --allowImportingTsExtensions configs/pagespeed.ts
 ```
+
+Without the `--module nodenext` flags, `tsc` defaults to CommonJS/ES5 and produces false errors (`import.meta not allowed`, `top-level await not allowed`, `Cannot find module 'mcp-curl'`). These are not real errors in the code — they are an artifact of the wrong module system setting.
 
 Note: `npx tsx configs/pagespeed.ts` uses esbuild and does **not** type-check — it is a runtime smoke test only. Both steps serve different purposes and both must pass.
 
@@ -135,7 +140,7 @@ Note: `npx tsx configs/pagespeed.ts` uses esbuild and does **not** type-check �
 - [ ] `CurlExecuteSchema.url` uses `httpOnlyUrl()` — not bare `z.url()` — enforcing http/https at schema layer
 - [ ] `configs/pagespeed.ts` handler updated to `async (args, _extra) =>`; inline protocol guard preserved
 - [ ] `rm -rf dist/ && npm run build` exits with zero errors and zero Zod deprecation warnings
-- [ ] `npx tsc --noEmit --skipLibCheck configs/pagespeed.ts` exits cleanly (required blocking gate)
+- [ ] `npx tsc --noEmit --skipLibCheck --module nodenext --moduleResolution nodenext --target esnext --allowImportingTsExtensions configs/pagespeed.ts` exits cleanly (required blocking gate)
 - [ ] `npm test` passes — all tests green, including the three new upstream test files (`api-discovery.test.ts`, `api-test.test.ts`, `schemas.test.ts`)
 - [ ] `npx tsx configs/pagespeed.ts` starts without import or runtime errors
 
@@ -204,7 +209,10 @@ grep "httpOnlyUrl" src/lib/utils/url.ts
 rm -rf dist/ && npm run build
 
 # 7. Type-check configs/pagespeed.ts (required blocking gate — not covered by npm run build)
-npx tsc --noEmit --skipLibCheck configs/pagespeed.ts
+# Must include ESM module flags or tsc produces false errors (import.meta, top-level await, mcp-curl)
+npx tsc --noEmit --skipLibCheck \
+  --module nodenext --moduleResolution nodenext --target esnext \
+  --allowImportingTsExtensions configs/pagespeed.ts
 
 # 8. Apply manual fix in configs/pagespeed.ts (line ~116)
 #    Change: async (args) => {

@@ -1,7 +1,7 @@
 ---
 title: "feat: Upgrade to upstream mcp-curl 3.0.1"
 type: feat
-status: active
+status: completed
 date: 2026-04-04
 ---
 

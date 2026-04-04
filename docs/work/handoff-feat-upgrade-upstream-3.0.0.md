@@ -157,3 +157,17 @@ The builder's self-assessment was honest and accurate. The handoff correctly fla
 
 ### Blockers
 None — clear to merge. P2 todos are post-merge follow-up items. Security semantics are correct at all three enforcement points; the issues are code quality and test coverage.
+
+---
+
+## Post-Review Fixes — 2026-04-04
+
+All three review todos resolved in the same session:
+
+| Todo (removed) | Summary |
+|----------------|---------|
+| `docs/todos/003-pending-p3-scheme-check-split-heuristic.md` | Fixed `httpOnlyUrl()` to use `new URL().protocol` (consistent with SSRF layer) |
+| `docs/todos/002-pending-p2-dry-httponly-url-not-reused.md` | `schemas.ts` and `validator.ts` now import and use `httpOnlyUrl()` — single source of truth |
+| `docs/todos/001-pending-p2-httponly-url-missing-tests.md` | Added 9 unit tests for `httpOnlyUrl()` to `url.test.ts`; suite now 339 tests (was 330) |
+
+**Test results after fixes:** 339 passed, 7 skipped. `tsc` gate: exit 0.

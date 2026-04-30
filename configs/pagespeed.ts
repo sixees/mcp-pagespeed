@@ -53,17 +53,46 @@ function extractMetrics(lighthouse: Record<string, any>) {
   };
 }
 
+// PageSpeed echoes the requested URL back as `data.id`. That field is
+// attacker-influenced (it round-trips into the LLM context). Sanitization
+// strips Unicode attack vectors, but ASCII keyword payloads in the URL
+// itself (e.g. `?q=ignore+previous+instructions`) round-trip intact.
+// Compare normalized forms; if they don't match the trusted input, fall
+// back to the input URL and emit a throttle-able warning to stderr.
+function trustedAnalyzedUrl(echoed: unknown, inputUrl: string): string {
+  if (typeof echoed === "string") {
+    try {
+      const a = new URL(echoed);
+      const b = new URL(inputUrl);
+      if (
+        a.origin === b.origin &&
+        a.pathname === b.pathname &&
+        a.search === b.search
+      ) {
+        return inputUrl;
+      }
+    } catch {
+      // fall through to mismatch path
+    }
+  }
+  console.error(
+    `pagespeed: analyzed_url mismatch (API echoed differs from input); using input URL`,
+  );
+  return inputUrl;
+}
+
 function buildOutput(
   data: Record<string, any>,
   lighthouse: Record<string, any>,
   preset: string,
+  inputUrl: string,
 ) {
   if (preset === "scores") return extractScores(lighthouse);
   if (preset === "metrics") return extractMetrics(lighthouse);
   return {
     scores: extractScores(lighthouse),
     metrics: extractMetrics(lighthouse),
-    analyzed_url: data.id,
+    analyzed_url: trustedAnalyzedUrl(data.id, inputUrl),
     strategy: lighthouse.configSettings?.formFactor,
   };
 }
@@ -223,7 +252,7 @@ try {
       }
 
       const preset = filter_preset ?? "summary";
-      const output = buildOutput(data, lighthouse, preset);
+      const output = buildOutput(data, lighthouse, preset, url);
 
       return {
         content: [
@@ -234,6 +263,17 @@ try {
   );
 
   await server.start("stdio");
+
+  // Wire signal handlers so startInjectionCleanup()'s setInterval is cleared
+  // on container/orchestrator shutdown. Without this, the process hangs on
+  // SIGTERM until SIGKILL because the timer keeps the event loop alive.
+  const shutdown = async (signal: NodeJS.Signals) => {
+    console.error(`[pagespeed] received ${signal}, shutting down`);
+    await server.shutdown();
+    process.exit(0);
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 } catch (error) {
   console.error("Failed to start PageSpeed MCP server:", error);
   process.exitCode = 1;

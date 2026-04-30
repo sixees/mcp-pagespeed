@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PageSpeed-relevant.
 - **`docs/todos/*`** — three resolved TODOs (`configure-unknown-fields`, `cache-utilities`,
   `filter-preset-description`) deleted after verifying their fixes are in place.
+- **`configs/example.yaml.template`** — generic upstream library template (referenced
+  `import { createApiServer } from "mcp-curl"` and a deleted `examples/from-yaml/` directory).
+  No consumer in this repo; the PageSpeed server uses `configs/pagespeed.yaml`.
 
 ### Added
 
@@ -36,9 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **`"private": true` in `package.json`** — prevents accidental `npm publish`. Combined with the legacy
-  `prepublishOnly` script and the historical name `mcp-curl`, this is a guardrail against pushing this
-  fork to the wrong namespace on npm.
+- **`"private": true` in `package.json`** — prevents accidental `npm publish`. The library at `src/lib/`
+  is internal-only and not intended for the npm registry; this flag makes that explicit at the toolchain
+  level.
 
 ## [3.1.1] - 2026-04-30
 

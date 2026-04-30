@@ -1,8 +1,11 @@
 // src/lib.ts
-// Library entry point for programmatic usage of mcp-curl
+// Main entry point for the vendored, internal-only library backing
+// `mcp-pagespeed`. Resolved by Node when consumers do
+//   import { ... } from "mcp-pagespeed";
+// via package.json#name + #exports.
 //
-// This module exports the extensible McpCurlServer class and all public types
-// for building custom MCP servers with cURL capabilities.
+// This is not a published package and provides no public API guarantees.
+// See ./lib/README.md `## Stability` for details.
 
 // Main server class
 export { McpCurlServer } from "./lib/extensible/index.js";

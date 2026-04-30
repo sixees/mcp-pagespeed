@@ -204,3 +204,88 @@ deleted in this PR. No new todos created in `docs/todos/`.
 | `docs/todos/configure-unknown-fields.md` | Validate `.configure()` unknown fields | `src/lib/extensible/mcp-curl-server.ts:119-134` now picks only `KNOWN_CONFIG_KEYS` and `console.warn`s on unknowns. Both clauses of the proposed fix satisfied. | commit `482439b` (verified during this work) | 2026-04-30 |
 | `docs/todos/cache-utilities.md` | Cache `server.utilities()` result | `src/lib/extensible/mcp-curl-server.ts:109` declares `_utilities` cache; `utilities()` lazily caches after `_frozenConfig`; `shutdown()` resets to `null`. | commit `482439b` (verified during this work) | 2026-04-30 |
 | `docs/todos/filter-preset-description.md` | Add `description` field to filterPresets | Optional `description` field added at `src/lib/schema/types.ts:79`, validated at `src/lib/schema/validator.ts:62`, consumed in `buildToolDescription()` at `src/lib/schema/generator.ts:470-474` with jqFilter fallback. | commit `482439b` (verified during this work) | 2026-04-30 |
+
+## Code Review — 2026-04-30
+
+### Review Summary
+- **Reviewer:** automated multi-agent review
+- **Focus areas requested:** SRP/DRY, security, performance, TypeScript MCP best practices
+- **Agents used:** code-simplicity-reviewer, security-sentinel, performance-oracle, typescript-reviewer, architecture-strategist, pattern-recognition-specialist
+- **Findings:** 🔴 P1: 4 (all fixed in this pass) | 🟡 P2: 3 (1 fixed, 2 ticketed) | 🔵 P3: 5 (2 fixed, 3 ticketed)
+
+### Handoff Assessment
+The builder's self-assessment was **largely honest**. The "Known issues" section
+correctly surfaced the brand-mismatch trade-off, the `configs/example.yaml.template`
+defer, the `bug_report.md` defer, and the `package.json#files` packaging concern.
+
+**Gaps the builder did not surface:**
+1. `CLAUDE.md:40-41` still claimed `configs/pagespeed.ts` imports from `"mcp-curl"`
+   (the actual code on this branch imports from `"mcp-pagespeed"`). Direct
+   contradiction with the rest of the PR.
+2. `src/lib.ts:2-5` JSDoc was missed during the rename pass (the sibling barrel
+   `src/lib/index.ts` was correctly updated).
+3. `docs/internal/custom-tools.md:61, 64, 235` code samples still showed
+   `import { McpCurlServer } from "mcp-curl"` — copy-paste footgun.
+4. `configs/example.yaml.template` was not just stale; it was actively broken
+   (its `import { createApiServer } from "mcp-curl"` no longer resolves and
+   the template references the deleted `examples/from-yaml/`).
+5. `configs/pagespeed.ts` had small DRY violations: `filter_preset ?? DEFAULT_PRESET`
+   computed twice and `(strategy ?? "MOBILE").toUpperCase()` computed twice.
+
+The builder's claim "Tests pass (493 passing)" verified — re-run on the same
+commit produced the same number. After review fixes: **495 passing**, 7 skipped.
+
+### Verified Claims
+| Handoff Claim | Verified? | Notes |
+|---------------|-----------|-------|
+| Tests pass (493 passing) | yes | Re-ran `npm test`; identical numbers. After review fixes: 495. |
+| `npm run typecheck` clean | yes | Both `tsconfig.json` and `tsconfig.fork.json`. |
+| `npm run build` clean | yes | Re-ran; ESM + DTS build success. |
+| Plan acceptance criteria met | mostly | `.coderabbit.yaml` audit was claimed but `git diff` shows no inspection occurred — ticketed (todo 004). |
+| No undisclosed issues beyond Known Issues | no | 4 P1 contradictions found and fixed; see "Gaps" above. |
+
+### Key Findings (severity-ordered, all fixes landed in the review commit)
+
+| ID | Severity | Category | Description | Fix |
+|----|----------|----------|-------------|-----|
+| 1 | 🔴 P1 | quality | `CLAUDE.md:40-41` says imports come from `"mcp-curl"`; actual is `"mcp-pagespeed"`. | Updated both lines to match runtime. |
+| 2 | 🔴 P1 | quality | `src/lib.ts:2-5` JSDoc still says "Library entry point for programmatic usage of mcp-curl". | Rewrote to mirror `src/lib/index.ts` Stability framing. |
+| 3 | 🔴 P1 | quality | `docs/internal/custom-tools.md` two code samples + inline comment use `"mcp-curl"` import; copy-paste footgun. | Updated both samples and the inline comment. |
+| 4 | 🔴 P1 | architecture | `configs/example.yaml.template` is actively broken (`mcp-curl` import won't resolve, references deleted `examples/from-yaml/`). | Deleted; CHANGELOG updated under Removed. |
+| 5 | 🟡 P2 | spr-dry | `configs/pagespeed.ts` computes `filter_preset ?? DEFAULT_PRESET` twice and `(strategy ?? "MOBILE").toUpperCase()` twice; audit log could drift from execution. | Hoisted both once after destructure. |
+| 6 | 🟡 P2 | architecture | `src/lib/index.ts` and `src/lib.ts` re-export ~14 symbols; `configs/pagespeed.ts` uses 6. | **Ticketed** — `docs/todos/001-pending-p2-trim-barrel-surface.md`. |
+| 7 | 🟡 P2 | packaging | `package.json#files: ["dist","docs"]` packages `docs/plans/` and `docs/work/` into `npm pack`. | **Ticketed** — `docs/todos/002-pending-p2-narrow-package-files-glob.md`. |
+| 8 | 🟡 P2 | architecture | Internal brand mismatch (`McpCurlServer`, `mcp-curl/${VERSION}` UA, session prefix) — already acknowledged by builder. | **Ticketed** — `docs/todos/003-pending-p2-rebrand-internal-symbols.md`. |
+| 9 | 🔵 P3 | quality | CHANGELOG Security bullet justified `private:true` partly via "the historical name `mcp-curl`" — but the rename happens in the same release. | Tightened wording. |
+| 10 | 🔵 P3 | testing | No regression test asserts `package.json#name === "mcp-pagespeed"`; rename-without-import-update would only fail at runtime. | Added `configs/self-import.test.ts` (2 tests). |
+| 11 | 🔵 P3 | hygiene | `.coderabbit.yaml` audit claimed in plan but `git diff` shows no inspection. | **Ticketed** — `docs/todos/004-pending-p3-audit-coderabbit-yaml.md`. |
+| 12 | 🔵 P3 | hygiene | `bug_report.md` is browser/iOS boilerplate. | **Ticketed** — `docs/todos/005-pending-p3-replace-bug-report-template.md`. |
+| 13 | 🔵 P3 | packaging | `dist/` is git-tracked (pre-existing, mitigated by `private:true`). | **Ticketed** — `docs/todos/006-pending-p3-gitignore-dist.md`. |
+| 14 | 🔵 P3 | typescript | `Record<string, any>` for API JSON could be a narrow Zod schema with `.passthrough()`. | **Ticketed** — `docs/todos/007-pending-p3-zod-api-response-schema.md`. |
+
+### Outstanding Todos
+<!-- Created during code review — see docs/todos/ for full content -->
+| File | Priority | Description | Source |
+|------|----------|-------------|--------|
+| `docs/todos/001-pending-p2-trim-barrel-surface.md` | P2 | Trim `src/lib/index.ts` + `src/lib.ts` barrels to actual consumer needs | code-review |
+| `docs/todos/002-pending-p2-narrow-package-files-glob.md` | P2 | Narrow `package.json#files` to exclude `docs/plans` and `docs/work` | code-review |
+| `docs/todos/003-pending-p2-rebrand-internal-symbols.md` | P2 | Rebrand internal `mcp-curl`-named symbols (class, file, UA, session prefix) | code-review |
+| `docs/todos/004-pending-p3-audit-coderabbit-yaml.md` | P3 | Actually audit `.coderabbit.yaml` (claimed but not done) | code-review |
+| `docs/todos/005-pending-p3-replace-bug-report-template.md` | P3 | Replace web-app `bug_report.md` template | code-review |
+| `docs/todos/006-pending-p3-gitignore-dist.md` | P3 | Gitignore `dist/`, rebuild on release | code-review |
+| `docs/todos/007-pending-p3-zod-api-response-schema.md` | P3 | Replace `Record<string, any>` API response with narrow Zod schema | code-review |
+
+### Blockers
+**None — clear to merge.** All P1 findings fixed in this review pass. P2/P3
+items are tracked as todos for follow-up PRs.
+
+### Files modified during review
+- `CLAUDE.md` — fix stale `"mcp-curl"` import string
+- `CHANGELOG.md` — tighten Security bullet wording; record `example.yaml.template` removal
+- `configs/example.yaml.template` — **deleted** (broken import + reference to deleted directory)
+- `configs/pagespeed.ts` — DRY hoist of `preset` and `normalisedStrategy`
+- `configs/self-import.test.ts` — **new** — pin self-import contract
+- `docs/internal/custom-tools.md` — fix two code samples + inline comment
+- `src/lib.ts` — update JSDoc header
+- `docs/todos/00{1..7}-pending-*.md` — **new** — 7 follow-up todos
+

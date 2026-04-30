@@ -58,10 +58,11 @@ type ToolCallback = (params: T) => Promise<{
 ## Basic Example
 
 ```typescript
-import {McpCurlServer} from "mcp-curl";
+import {McpCurlServer} from "mcp-pagespeed";
 import {z} from "zod";
 
-// Note: the "mcp-curl" import path resolves to the vendored library via package.json#name.
+// Note: "mcp-pagespeed" is a self-import — it resolves to the vendored library at
+// `src/lib/` via package.json#name + #exports. There is no external dependency.
 const server = new McpCurlServer();
 
 server.registerCustomTool(
@@ -232,7 +233,7 @@ annotations: {
 ## Complete Example: Weather API Tool
 
 ```typescript
-import {McpCurlServer} from "mcp-curl";
+import {McpCurlServer} from "mcp-pagespeed";
 import {z} from "zod";
 
 const server = new McpCurlServer()

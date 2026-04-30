@@ -102,6 +102,12 @@ try {
         filter_preset?: FilterPreset;
       };
 
+      // Hoisted once: defaults applied for both the audit log and the
+      // downstream API/output paths so the audit can never report a
+      // different preset/strategy than the one actually executed.
+      const preset = filter_preset ?? DEFAULT_PRESET;
+      const normalisedStrategy = (strategy ?? "MOBILE").toUpperCase();
+
       // Parse the input URL exactly once. The parsed object is passed
       // through to API URL construction; the canonical .toString() is
       // used as the trust-boundary input for buildTrustedMeta. Three
@@ -142,17 +148,15 @@ try {
       // — full URL, query string, and any embedded auth are intentionally
       // excluded.
       if (process.env.PAGESPEED_AUDIT === "1") {
-        const auditPreset = filter_preset ?? DEFAULT_PRESET;
-        const auditStrategy = (strategy ?? "MOBILE").toUpperCase();
         console.error(
-          `[pagespeed] invoke target=${parsedInput.hostname} preset=${auditPreset} strategy=${auditStrategy}`,
+          `[pagespeed] invoke target=${parsedInput.hostname} preset=${preset} strategy=${normalisedStrategy}`,
         );
       }
 
       // Build API URL with all 4 categories (YAML schema can't repeat params)
       const apiUrl = new URL(`${schema.api.baseUrl}${endpoint.path}`);
       apiUrl.searchParams.set("url", trustedInput);
-      apiUrl.searchParams.set("strategy", (strategy ?? "MOBILE").toUpperCase());
+      apiUrl.searchParams.set("strategy", normalisedStrategy);
       for (const cat of CATEGORIES) {
         apiUrl.searchParams.append("category", cat);
       }
@@ -250,7 +254,6 @@ try {
         };
       }
 
-      const preset = filter_preset ?? DEFAULT_PRESET;
       const warnings: string[] = [];
       const scores = extractScores(lighthouse);
       const metrics = extractMetrics(lighthouse);

@@ -37,8 +37,9 @@ Key files in `configs/`:
   headers, auth) and input schema generation. The jqFilter/filterPresets exist only to drive
   `generateInputSchema()` — actual response processing is in TypeScript.
 
-Note: `configs/pagespeed.ts` imports from `"mcp-curl"`. That bare specifier resolves to the local vendored
-library via `package.json#name`; there is no external `mcp-curl` package dependency.
+Note: `configs/pagespeed.ts` imports from `"mcp-pagespeed"` and `"mcp-pagespeed/schema"`. Those bare
+specifiers are self-imports — they resolve to the local vendored library at `src/lib/` via
+`package.json#name` + `#exports`. There is no external `mcp-pagespeed` package dependency on npm.
 
 ### Key Design Decisions
 

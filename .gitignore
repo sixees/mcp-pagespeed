@@ -46,6 +46,8 @@ configs/*.json
 # PageSpeed fork — tracked on pagespeed branch
 !configs/pagespeed.yaml
 !configs/pagespeed.ts
+!configs/pagespeed-helpers.ts
+!configs/pagespeed-helpers.test.ts
 
 # Runtime output
 /output

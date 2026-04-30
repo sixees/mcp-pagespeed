@@ -31,6 +31,12 @@ interface McpCurlConfig {
     defaultUserAgent?: string;
     /** Default Referer for all requests. Empty string disables. */
     defaultReferer?: string;
+    /**
+     * Wrap responses in per-request sentinel tags to resist prompt injection (spotlighting).
+     * Note: does not apply to tools registered via `generateToolDefinitions()` — those tools
+     * return filtered JSON directly without passing through the spotlighting wrapper.
+     */
+    enableSpotlighting?: boolean;
 }
 /**
  * Context provided to hooks during tool execution.
@@ -174,6 +180,7 @@ declare class McpCurlServer {
     private _httpServer;
     private _sessionManager;
     private _rateLimitInterval;
+    private _injectionCleanupInterval;
     private _utilities;
     /**
      * Configure server options.
@@ -240,7 +247,10 @@ declare class McpCurlServer {
      * implement it within the handler function itself.
      *
      * @param name - Tool name (must match /^[a-z][a-z0-9_]*$/)
-     * @param meta - Tool metadata (title, description, inputSchema)
+     * @param meta - Tool metadata (title, description, inputSchema). title and description
+     *   are sanitized automatically. inputSchema field descriptions (.describe() strings)
+     *   are NOT sanitized — callers must sanitize any field descriptions sourced from
+     *   external input using sanitizeDescription() before registering.
      * @param handler - Tool handler function
      * @returns this for chaining
      * @throws Error if called after start()

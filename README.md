@@ -122,9 +122,11 @@ a large response triggers auto-save to file.
 
 ## Environment Variables
 
-| Variable            | Description                                          |
-|---------------------|------------------------------------------------------|
-| `PAGESPEED_API_KEY` | Google API key (optional, higher rate limits)        |
+| Variable            | Description                                                                                  |
+|---------------------|----------------------------------------------------------------------------------------------|
+| `PAGESPEED_API_KEY` | Google API key (optional, higher rate limits)                                                |
+| `PAGESPEED_DEBUG`   | When set to `1`, stderr includes raw API error bodies for debugging                          |
+| `PAGESPEED_AUDIT`   | When set to `1`, stderr emits one hostname-only audit line per invocation (off by default)   |
 
 Without an API key, the PageSpeed API is rate-limited to ~25 queries per 100 seconds.
 
@@ -135,6 +137,11 @@ controls. See the [mcp-curl security documentation](https://github.com/sixees/mc
 for details.
 
 The `curl_execute` tool is disabled — only the purpose-built `analyze_pagespeed` tool can make HTTP requests.
+
+This fork adds prompt-injection defense (response sanitisation, detection logging, and a trust-boundary
+helper that re-validates the API-echoed URL against the input) in 3.1.1. See
+[CLAUDE.md](./CLAUDE.md) `## Security` for the full trust model and [CHANGELOG.md](./CHANGELOG.md) for
+version history.
 
 ## Upstream
 

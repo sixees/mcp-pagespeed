@@ -2,10 +2,12 @@
 name: Duplicate URL parsing across handler and trustedAnalyzedUrl
 description: configs/pagespeed.ts parses the input URL three times — once for protocol validation, once inside trustedAnalyzedUrl, once when constructing the API URL — each with its own try/catch. Single source of truth missing
 type: task
-status: pending
+status: complete
 priority: p2
 issue_id: 013
 tags: [code-review, spr-dry, quality]
+resolved_date: 2026-04-30
+resolution: Single `new URL(url)` parse at handler top. trustedInput = parsedInput.toString() flows through API URL construction and trust validation. No second parse, no second try/catch.
 ---
 
 # Duplicate URL parsing across handler and trustedAnalyzedUrl
@@ -54,13 +56,14 @@ Then `trustedAnalyzedUrl` takes `URL | string` and the API URL builder uses `par
 
 ## Acceptance Criteria
 
-- [ ] `new URL(<input>)` is called once in the handler.
-- [ ] All downstream consumers use the parsed URL object (or its canonical `.toString()`).
-- [ ] No behavioural change — same validation outcome, same outbound API URL, same trust-comparison result.
+- [x] `new URL(<input>)` is called once in the handler.
+- [x] All downstream consumers use the parsed URL object (or its canonical `.toString()`).
+- [x] No behavioural change — same validation outcome, same outbound API URL, same trust-comparison result.
 
 ## Work Log
 
 - 2026-04-30: Filed during code review.
+- 2026-04-30: Resolved. Handler at `configs/pagespeed.ts:97-122` parses the input URL exactly once into `parsedInput: URL`; the protocol guard runs against `parsedInput.protocol`; `trustedInput = parsedInput.toString()` is the canonical form passed to (a) `apiUrl.searchParams.set("url", trustedInput)` for outbound construction and (b) `buildTrustedMeta(data, trustedInput, strategy, warnings)` for trust comparison. `trustedAnalyzedUrl` still parses both echoed and trusted strings internally, but they're parsed from the *same* canonical source-of-truth string, eliminating the prior 3-parse divergence risk.
 
 ## Resources
 

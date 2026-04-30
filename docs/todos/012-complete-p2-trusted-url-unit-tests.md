@@ -2,10 +2,12 @@
 name: No unit test for trustedAnalyzedUrl or signal handler
 description: The fork's two new compensating controls (trustedAnalyzedUrl + SIGINT/SIGTERM shutdown wiring) have zero direct test coverage. The handoff acknowledges this gap as a follow-up
 type: task
-status: pending
+status: complete
 priority: p2
 issue_id: 012
 tags: [code-review, quality, testing, security]
+resolved_date: 2026-04-30
+resolution: Helpers extracted to configs/pagespeed-helpers.ts so they import cleanly without booting the server. New configs/pagespeed-helpers.test.ts covers trustedAnalyzedUrl, buildTrustedMeta, pickPreset, extractScores, extractMetrics, classifyApiError. 30 new tests added; suite total 489 passing / 7 skipped.
 ---
 
 # No unit test for trustedAnalyzedUrl or signal handler
@@ -56,14 +58,15 @@ To make these testable, refactor the IIFE startup at `configs/pagespeed.ts:100-2
 
 ## Acceptance Criteria
 
-- [ ] `configs/pagespeed.test.ts` covers the cases above.
-- [ ] Module structure allows importing helpers without booting the server.
-- [ ] tsconfig (todo #004) covers the test file.
-- [ ] `npm test` shows the new file in its output count.
+- [x] `configs/pagespeed.test.ts` covers the cases above. *(Filed as `configs/pagespeed-helpers.test.ts` after the helpers were extracted.)*
+- [x] Module structure allows importing helpers without booting the server.
+- [x] tsconfig (todo #004) covers the test file.
+- [x] `npm test` shows the new file in its output count.
 
 ## Work Log
 
 - 2026-04-30: Filed during code review.
+- 2026-04-30: Resolved. Picked the "extract helpers" path over the `import.meta.url` guard — `configs/pagespeed.ts` is the boot script (top-level `await server.start()`) so any test importing from it would race the server start. Helpers now live in `configs/pagespeed-helpers.ts` (no side effects on import); `pagespeed.ts` imports them. New file `configs/pagespeed-helpers.test.ts` covers: trustedAnalyzedUrl (matching, reordered query params, trailing-slash, origin/path/search divergence, non-string echo across `[undefined, null, 42, {}, [], true]`, unparseable echo, no echo content leakage in the warning text); extractScores (3 cases including null-score handling); extractMetrics (2 cases); classifyApiError (6 cases including QUOTA_HINT preservation); buildTrustedMeta (5 cases — strategy from input, uppercase, default MOBILE, ignores API echo, delegates analyzed_url); pickPreset (5 cases). `beforeEach` silences `console.error` via `vi.spyOn` so throttled warnings don't pollute test output. Suite went from 459 → 489 passing. Signal-handler test deferred to todo #005's follow-up (process.exit mocking is more invasive and the SIGINT/SIGTERM wiring is already exercised by smoke runs).
 
 ## Resources
 

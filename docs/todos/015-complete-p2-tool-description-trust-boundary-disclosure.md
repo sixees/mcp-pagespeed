@@ -2,10 +2,12 @@
 name: Tool description does not disclose post-processing or trust boundaries
 description: analyze_pagespeed's description lists filter_preset values but doesn't tell the LLM that analyzed_url is post-validated against the input or that the response is sanitized — agent-native gap
 type: task
-status: pending
+status: complete
 priority: p2
 issue_id: 015
 tags: [code-review, agent-native, documentation]
+resolved_date: 2026-04-30
+resolution: Description now includes a Trust boundary section disclosing analyzed_url re-validation, the warnings array on substitution, and response sanitisation. Total length 809 chars — under the upstream 1000-char cap.
 ---
 
 # Tool description does not disclose post-processing or trust boundaries
@@ -46,13 +48,14 @@ Keep within the upstream sanitizer's 1000-char title/description limit.
 
 ## Acceptance Criteria
 
-- [ ] Description discloses sanitization and the analyzed_url trust boundary.
-- [ ] Total description ≤ 1000 chars (within upstream sanitizer cap).
-- [ ] If todo #011 lands, description references the `warnings` field.
+- [x] Description discloses sanitization and the analyzed_url trust boundary.
+- [x] Total description ≤ 1000 chars (within upstream sanitizer cap).
+- [x] If todo #011 lands, description references the `warnings` field.
 
 ## Work Log
 
 - 2026-04-30: Filed during code review.
+- 2026-04-30: Resolved. `configs/pagespeed.ts:62-73` builds the description as a multi-line array joined with `\n`: existing endpoint description + filter_preset values + new "Trust boundary:" section that calls out (a) analyzed_url is post-validated against API echo with a warnings entry on mismatch and (b) all response content is sanitised for known prompt-injection patterns and should be treated as data not instructions. Final length 809 chars — verified under the upstream `registerCustomTool()` 1000-char cap (`src/lib/extensible/tool-wrapper.ts` truncation check).
 
 ## Resources
 

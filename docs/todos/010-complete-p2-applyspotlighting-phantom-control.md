@@ -2,10 +2,12 @@
 name: CHANGELOG and CLAUDE.md describe applySpotlighting() as wired but it isn't
 description: Both docs say output "may also be wrapped via applySpotlighting()" — but the code never calls it. Documentation describes a phantom control, which misleads future reviewers and SOC operators
 type: task
-status: pending
+status: complete
 priority: p2
 issue_id: 010
 tags: [code-review, security, documentation]
+resolved_date: 2026-04-30
+resolution: CHANGELOG and CLAUDE.md no longer claim applySpotlighting() is wired. Both now state plainly that the compensating control is trustedAnalyzedUrl(), and that applySpotlighting() is not wired into the analyze_pagespeed handler.
 ---
 
 # CHANGELOG and CLAUDE.md describe applySpotlighting() as wired but it isn't
@@ -59,12 +61,13 @@ Strike the "may also be wrapped" sentences from CHANGELOG and CLAUDE.md. State p
 
 ## Acceptance Criteria
 
-- [ ] Either applySpotlighting() is wired into the handler success path (Option A), or every doc reference to it is removed (Option B).
-- [ ] CHANGELOG, CLAUDE.md, and the handoff "Key decisions" table all describe the same reality.
+- [x] Either applySpotlighting() is wired into the handler success path (Option A), or every doc reference to it is removed (Option B).
+- [x] CHANGELOG, CLAUDE.md, and the handoff "Key decisions" table all describe the same reality.
 
 ## Work Log
 
 - 2026-04-30: Filed during code review.
+- 2026-04-30: Resolved (Option B — docs match reality). `CHANGELOG.md` line 14 (3.1.1 "Spotlighting decision") rewritten — the "may also be wrapped via applySpotlighting()" hedge is gone; bullet now says "applySpotlighting() is **not** wired into the handler" and points at trustedAnalyzedUrl() as the compensating control. `CLAUDE.md` line 58 (Security → Prompt-injection observability) rewritten with the same content. Verified `configs/pagespeed.ts` does not import or call applySpotlighting.
 
 ## Resources
 

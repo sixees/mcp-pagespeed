@@ -2,10 +2,12 @@
 name: lighthouse.configSettings.formFactor (strategy) is API-echoed and unvalidated
 description: buildOutput surfaces strategy from the API response without re-validating against the input — same round-trip class as analyzed_url but no compensating control
 type: task
-status: pending
+status: complete
 priority: p2
 issue_id: 009
 tags: [code-review, security, completeness]
+resolved_date: 2026-04-30
+resolution: buildTrustedMeta now sources `strategy` from the input parameter (uppercased, default MOBILE) instead of `lighthouse.configSettings.formFactor`. The API echo of formFactor is no longer trusted.
 ---
 
 # Strategy round-trip is API-echoed and unvalidated
@@ -40,12 +42,13 @@ instead of `lighthouse.configSettings?.formFactor`. The input is already in scop
 
 ## Acceptance Criteria
 
-- [ ] `strategy` in the output object is sourced from the trusted input, not the API echo.
-- [ ] Done as part of todo #003's `buildTrustedMeta` consolidation.
+- [x] `strategy` in the output object is sourced from the trusted input, not the API echo.
+- [x] Done as part of todo #003's `buildTrustedMeta` consolidation.
 
 ## Work Log
 
 - 2026-04-30: Filed during code review.
+- 2026-04-30: Resolved as part of the `buildTrustedMeta` consolidation. `configs/pagespeed-helpers.ts:115-125` now takes `inputStrategy` directly and returns `(inputStrategy ?? "MOBILE").toUpperCase()`. The handler at `configs/pagespeed.ts:228` passes the input `strategy` arg, never `lighthouse.configSettings.formFactor`. Test coverage: `buildTrustedMeta` cases in `configs/pagespeed-helpers.test.ts` ("sources strategy from input, not API echo", "uppercases lowercase strategy input", "defaults strategy to MOBILE when input is undefined", "ignores API-echoed strategy disagreement").
 
 ## Resources
 

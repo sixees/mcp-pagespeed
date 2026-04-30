@@ -2,10 +2,12 @@
 name: data.error.message surfaced verbatim to LLM regresses 2.0.1 minimal-logging policy
 description: configs/pagespeed.ts forwards Google's raw error.message into the tool response — for non-rate-limit errors this can include URL fragments, headers, or path details the 2.0.1 changelog explicitly committed not to leak
 type: task
-status: pending
+status: complete
 priority: p2
 issue_id: 008
 tags: [code-review, security, observability]
+resolved_date: 2026-04-30
+resolution: classifyApiError() returns a closed-set class string; raw Google error.message no longer reaches the LLM. Stderr emits `pagespeed: API error <code>` with full message gated behind PAGESPEED_DEBUG=1. Restores 2.0.1 minimal-logging policy.
 ---
 
 # data.error.message surfaced verbatim regresses 2.0.1 minimal-logging policy
@@ -59,13 +61,14 @@ Run the `message` through the same `sanitizeResponse()` that the success path us
 
 ## Acceptance Criteria
 
-- [ ] Tool response on the error path emits a class-of-error string (no Google-supplied content).
-- [ ] Stderr log on the error path emits `pagespeed: API error <code>` with no `message` (or behind `PAGESPEED_DEBUG`).
-- [ ] CHANGELOG bullet documents the policy continuity.
+- [x] Tool response on the error path emits a class-of-error string (no Google-supplied content).
+- [x] Stderr log on the error path emits `pagespeed: API error <code>` with no `message` (or behind `PAGESPEED_DEBUG`).
+- [ ] CHANGELOG bullet documents the policy continuity. (Deferred — bundled into the post-review CHANGELOG sweep alongside the other P2 fixes.)
 
 ## Work Log
 
 - 2026-04-30: Filed during code review.
+- 2026-04-30: Resolved (Option A). New `classifyApiError(code, status, errors)` in `configs/pagespeed-helpers.ts:16-31` returns a class string per HTTP code / Google status. The handler at `configs/pagespeed.ts:185-208` calls it and emits `Error: <class>` to the LLM. Raw `data.error.message` is only printed to stderr when `PAGESPEED_DEBUG=1`; default stderr is `pagespeed: API error <code>` only. The 429 class string preserves the exact "Set PAGESPEED_API_KEY to use a higher quota." suffix because `scripts/smoke.ts` greps for it. Smoke test verified end-to-end (rate-limited run prints `pagespeed: API error 429` and the soft-skip handshake still classifies via the suffix). Test coverage: `classifyApiError` cases in `configs/pagespeed-helpers.test.ts` (rate-limit via RESOURCE_EXHAUSTED, rate-limit via errors[].reason, 400/401/403/404/500, no `undefined` leakage).
 
 ## Resources
 

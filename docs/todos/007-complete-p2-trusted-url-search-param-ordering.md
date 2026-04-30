@@ -2,10 +2,12 @@
 name: trustedAnalyzedUrl is brittle to query-param reordering and trailing-slash variance
 description: trustedAnalyzedUrl compares URL.search byte-for-byte after parsing — but PageSpeed could legitimately reorder params or normalize differently, falsely tripping the mismatch path
 type: task
-status: pending
+status: complete
 priority: p2
 issue_id: 007
 tags: [code-review, security, quality]
+resolved_date: 2026-04-30
+resolution: trustedAnalyzedUrl now compares canonicalised search (sorted key+value, encoded). Reordered query params no longer trigger a false mismatch.
 ---
 
 # trustedAnalyzedUrl is brittle to query-param reordering and trailing-slash variance
@@ -54,12 +56,13 @@ Drop the search comparison entirely. Rationale: the security threat is `data.id`
 
 ## Acceptance Criteria
 
-- [ ] `trustedAnalyzedUrl` compares canonicalized (sorted) query params.
-- [ ] Unit tests cover: matching origin/path/search; reordered query params; mismatched origin; mismatched path; non-string echo; unparseable echo.
+- [x] `trustedAnalyzedUrl` compares canonicalized (sorted) query params.
+- [x] Unit tests cover: matching origin/path/search; reordered query params; mismatched origin; mismatched path; non-string echo; unparseable echo.
 
 ## Work Log
 
 - 2026-04-30: Filed during code review.
+- 2026-04-30: Resolved (Option A). Added `canonicalSearch(u)` helper in `configs/pagespeed-helpers.ts:62-71` (sorts entries by key then value, encodes both sides). `trustedAnalyzedUrl` now compares `canonicalSearch(a) === canonicalSearch(b)` instead of `a.search === b.search`. Covered by `configs/pagespeed-helpers.test.ts` cases "returns inputUrl when echo has reordered query params" and the trailing-slash, origin/path/search divergence cases.
 
 ## Resources
 

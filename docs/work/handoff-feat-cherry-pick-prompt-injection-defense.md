@@ -121,7 +121,7 @@ Tag: `3.1.1` (no `v` prefix).
 | docs/todos/cache-utilities.md | Low | `server.utilities()` re-creates `InstanceUtilities` on every call; could be cached after `start()`. Pre-existing TODO; not introduced by this work. | Pre-existing |
 
 ### Resolved Todos
-<!-- Resolved during the post-review P1 sweep on 2026-04-30. Files retained at `*-complete-*` per repo convention; not deleted. -->
+<!-- Resolved during the post-review P1 + P2 sweeps on 2026-04-30. Files retained at `*-complete-*` per repo convention; not deleted. -->
 
 | File | Title | Summary | Resolved by | Date |
 |------|-------|---------|-------------|------|
@@ -131,6 +131,15 @@ Tag: `3.1.1` (no `v` prefix).
 | `docs/todos/004-complete-p1-tsc-coverage-gap.md` | tsconfig.json doesn't include configs/ or scripts/ | Added `tsconfig.fork.json` (extends main, `noEmit: true`, `rootDir: "."`) and `npm run typecheck` script that runs both configs sequentially. Fork-specific code now type-checked under strict mode. | code-review P1 sweep | 2026-04-30 |
 | `docs/todos/005-complete-p1-shutdown-handler-error-handling.md` | SIGINT/SIGTERM handler swallows shutdown failures and re-entrancy | Added module-scoped re-entrancy guard, try/catch around `await server.shutdown()`, discriminated exit code (1 on failure). Orchestrators can now distinguish graceful from failed-graceful shutdown. | code-review P1 sweep | 2026-04-30 |
 | `docs/todos/006-complete-p1-smoke-script-pattern-violations.md` | Smoke script indent and log-prefix drift | Reformatted `scripts/smoke.ts` to 2-space indent (matching `configs/`); standardised harness log prefix to `[smoke]`; added `.editorconfig` locking 2-space for `configs/`+`scripts/`, 4-space for `src/lib/` (preserves upstream parity). Original P1 framing was overstated — see todo Work Log. | code-review P1 sweep | 2026-04-30 |
+| `docs/todos/007-complete-p2-trusted-url-search-param-ordering.md` | trustedAnalyzedUrl brittle to query-param reordering | Added `canonicalSearch()` helper (sorted key+value, encoded). `trustedAnalyzedUrl` compares canonicalised search instead of raw `URL.search`. Reordered query params no longer trigger false mismatches. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/008-complete-p2-error-message-leakage.md` | data.error.message verbatim leakage to LLM | New `classifyApiError(code, status, errors)` returns a closed-set class string; raw Google `error.message` is gated behind `PAGESPEED_DEBUG=1`. Restores the 2.0.1 minimal-logging policy. Smoke's `QUOTA_HINT` suffix preserved. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/009-complete-p2-strategy-roundtrip-validation.md` | Strategy round-trip unvalidated | `buildTrustedMeta` now sources `strategy` from the input parameter (`(input ?? "MOBILE").toUpperCase()`), not from `lighthouse.configSettings.formFactor`. The API echo of formFactor is no longer trusted. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/010-complete-p2-applyspotlighting-phantom-control.md` | applySpotlighting phantom control in docs | CHANGELOG and CLAUDE.md no longer claim `applySpotlighting()` is wired. Both state plainly that `trustedAnalyzedUrl()` is the compensating control and `applySpotlighting()` is **not** wired into the handler. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/011-complete-p2-trusted-url-mismatch-invisible-to-llm.md` | trustedAnalyzedUrl mismatch invisible to LLM | `trustedAnalyzedUrl` takes a `warnings: string[]` out-param and pushes a structured note on every fallback path; `pickPreset` attaches the array to all three preset shapes when non-empty. Echoed URL content withheld. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/012-complete-p2-trusted-url-unit-tests.md` | No unit tests for fork helpers | Helpers extracted to `configs/pagespeed-helpers.ts` (importable without booting the server). New `configs/pagespeed-helpers.test.ts` adds 30 tests covering trustedAnalyzedUrl, buildTrustedMeta, pickPreset, extractScores, extractMetrics, classifyApiError. Suite went 459 → 489 passing. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/013-complete-p2-duplicate-url-parsing.md` | Duplicate URL parsing across handler/helper | Single `new URL(url)` parse at handler top; `trustedInput = parsedInput.toString()` flows through API URL construction and trust validation. The "validated" URL and the "trusted" URL are now the same canonical string. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/014-complete-p2-tool-annotations-helper.md` | Inline annotations vs library helper | `annotations: getMethodAnnotations("GET")` (imported from `mcp-curl/schema` subpath export) replaces the inline `{ readOnlyHint, openWorldHint }`. Single source of truth restored; future library additions land for free. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/015-complete-p2-tool-description-trust-boundary-disclosure.md` | Tool description doesn't disclose trust boundary | Description gains a "Trust boundary" section disclosing analyzed_url re-validation, the warnings array on substitution, and response sanitisation. Total length 809 chars — under the upstream 1000-char cap. | code-review P2 sweep | 2026-04-30 |
 
 ---
 
@@ -200,26 +209,19 @@ Net: handoff is in the top quartile of self-assessments. The builder surfaced th
 | 018 | 🔵 P3 | docs | README.md doesn't link to CHANGELOG/CLAUDE.md security sections | `docs/todos/018-pending-p3-readme-changelog-link.md` |
 
 ### Outstanding Todos
-<!-- Todos created during this review — see docs/todos/ for full content. The 6 P1 entries have been resolved; see "Resolved Todos" above. -->
+<!-- Todos created during this review — see docs/todos/ for full content. The 6 P1 and 9 P2 entries have been resolved; see "Resolved Todos" above and the post-review sweep sections below. -->
 
 | File | Priority | Description | Source |
 |------|----------|-------------|--------|
-| docs/todos/007-pending-p2-trusted-url-search-param-ordering.md | P2 | trustedAnalyzedUrl brittle to search reordering | code-review |
-| docs/todos/008-pending-p2-error-message-leakage.md | P2 | API error message verbatim leakage | code-review |
-| docs/todos/009-pending-p2-strategy-roundtrip-validation.md | P2 | Strategy round-trip unvalidated | code-review |
-| docs/todos/010-pending-p2-applyspotlighting-phantom-control.md | P2 | Phantom applySpotlighting documentation | code-review |
-| docs/todos/011-pending-p2-trusted-url-mismatch-invisible-to-llm.md | P2 | Mismatch invisible to LLM (agent-native) | code-review |
-| docs/todos/012-pending-p2-trusted-url-unit-tests.md | P2 | Missing unit tests for fork helpers | code-review |
-| docs/todos/013-pending-p2-duplicate-url-parsing.md | P2 | Triple URL parse / single source of truth | code-review |
-| docs/todos/014-pending-p2-tool-annotations-helper.md | P2 | Use library annotations helper | code-review |
-| docs/todos/015-pending-p2-tool-description-trust-boundary-disclosure.md | P2 | Tool description trust boundary disclosure | code-review |
 | docs/todos/016-pending-p3-magic-numbers-constants.md | P3 | Named constants for magic numbers | code-review |
 | docs/todos/017-pending-p3-detection-logger-correlation.md | P3 | Detection-log correlation gap | code-review |
 | docs/todos/018-pending-p3-readme-changelog-link.md | P3 | README → CHANGELOG/CLAUDE.md security link | code-review |
 
 ### Blockers
 
-**Update 2026-04-30 (post-review P1 sweep):** All 6 P1 findings resolved. See "Resolved Todos" table above and the Post-Review Resolution section below. No remaining merge blockers; the 9 outstanding P2s and 3 P3s are follow-up work, not gates.
+**Update 2026-04-30 (post-review P2 sweep):** All 6 P1 + 9 P2 findings resolved. The 3 P3s are follow-up work, not gates.
+
+**Update 2026-04-30 (post-review P1 sweep):** All 6 P1 findings resolved. See "Resolved Todos" table above and the Post-Review Resolution section below.
 
 Original triage (kept for historical context):
 
@@ -249,3 +251,33 @@ All 6 P1 findings from the multi-agent review were addressed in a single sweep. 
 
 ### Test gaps (acknowledged, not in this sweep)
 - No fork-side unit tests for the JSON.parse fail-closed path or the SIGINT rejection path. Both consolidated under todo #012 as a single follow-up.
+
+---
+
+## Post-Review Resolution — 2026-04-30 (P2 sweep)
+
+All 9 P2 findings from the multi-agent review were addressed in a second sweep. Themes:
+
+### Trust-boundary completeness (#007, #009, #011, #013, #015)
+- **`configs/pagespeed-helpers.ts:62-71` — `canonicalSearch(u)`** — Sorts URL search params by key then value and encodes both sides. `trustedAnalyzedUrl` now compares `canonicalSearch(a) === canonicalSearch(b)` instead of `a.search === b.search`. Robust to legitimate reordering by PageSpeed; any byte-level deviation after normalisation still falls back. (#007)
+- **`configs/pagespeed-helpers.ts:115-125` — `buildTrustedMeta` strategy from input** — `strategy` now comes from `(inputStrategy ?? "MOBILE").toUpperCase()`, not from `lighthouse.configSettings.formFactor`. Every API-echoed field that round-trips into LLM context is now re-validated against trusted input — no exceptions. (#009)
+- **`configs/pagespeed-helpers.ts:81-141` — warnings out-param + preset attachment** — `trustedAnalyzedUrl` takes a `warnings: string[]` array; on fallback it pushes "analyzed_url substituted with the URL you submitted; the API echoed a different value (echo content withheld)." `pickPreset` attaches the array to every preset's response when non-empty (operators care about substitutions even when the LLM only asked for `scores`). The mismatch is now an LLM-visible signal, not just a stderr line. (#011)
+- **`configs/pagespeed.ts:97-122` — single URL parse** — `new URL(url)` is called exactly once at handler top; `parsedInput.toString()` is the canonical form passed to API URL construction and to `buildTrustedMeta`. The 3-parse divergence risk is gone. (#013)
+- **`configs/pagespeed.ts:62-73` — Trust boundary disclosure in tool description** — New "Trust boundary:" section in the tool description tells the LLM that `analyzed_url` is the input URL re-validated against the API echo, that mismatches surface in `warnings`, and that response content is sanitised for known prompt-injection patterns. Total description 809 chars — under the upstream `registerCustomTool()` 1000-char cap. (#015)
+
+### Observability + policy (#008, #010)
+- **`configs/pagespeed-helpers.ts:16-31` — `classifyApiError(code, status, errors)`** — Closed-set class strings replace verbatim `data.error.message` forwarding to the LLM. The handler at `configs/pagespeed.ts:185-208` calls `classifyApiError`, returns the class string to the LLM, and emits `pagespeed: API error <code>` to stderr. Raw API messages are gated behind `PAGESPEED_DEBUG=1`. The 429 class string preserves the exact "Set PAGESPEED_API_KEY to use a higher quota." suffix because `scripts/smoke.ts` greps for it (verified: smoke's quota soft-skip still classifies correctly). Restores the 2.0.1 minimal-logging policy on the error path. (#008)
+- **`CHANGELOG.md:14` and `CLAUDE.md:58`** — Phantom-control language removed. Both files now state plainly that `applySpotlighting()` is **not** wired into the handler and that `trustedAnalyzedUrl()` is the compensating control (origin + pathname + canonicalised search; falls back to input on mismatch with a structured warning). No more "may also be wrapped" hedge. (#010)
+
+### Testing + library patterns (#012, #014)
+- **`configs/pagespeed-helpers.ts`** (new) — Helpers extracted from `configs/pagespeed.ts` (which is the boot script with top-level `await server.start()`). Importable from tests without booting the server.
+- **`configs/pagespeed-helpers.test.ts`** (new) — 30 new tests across 6 suites covering all extracted helpers. `beforeEach` silences `console.error` via `vi.spyOn` so the throttled mismatch warning doesn't pollute test output. Suite total: 459 → 489 passing / 7 skipped. Signal-handler test deferred (process.exit mocking is more invasive; smoke runs already exercise the SIGINT/SIGTERM wiring). (#012)
+- **`configs/pagespeed.ts:21,82` — `getMethodAnnotations("GET")` from `mcp-curl/schema`** — Inline `{ readOnlyHint: true, openWorldHint: true }` replaced with the library helper. Subpath export resolves via `package.json` exports field. No behavioural change; future library additions (e.g. `idempotentHint`) land for free. (#014)
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 489 passed, 7 skipped (was 459 — net +30 from the new helpers test file).
+- `npm run smoke` ran end-to-end on quota-exhausted IP — soft-skip path correctly classified via `QUOTA_HINT`; new stderr `pagespeed: API error 429` (no message body) confirms #008's scrub is live in production.
+
+### Test gaps (acknowledged, not in this sweep)
+- Helper tests use mocked `console.error`; they don't assert that the throttled warning *would* fire on a real run. The detection-logger has its own per-file isolation tests (cherry-picked from upstream); the fork-side `console.error` line in `trustedAnalyzedUrl` is exercised by the existing fallback-path test cases through the warnings array.

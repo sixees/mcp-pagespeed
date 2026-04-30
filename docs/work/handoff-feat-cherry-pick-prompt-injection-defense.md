@@ -336,3 +336,41 @@ _None — no follow-ups created from this pass._
 - `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
 - `npm test` 489 passed, 7 skipped — unchanged.
 - Both review threads resolved on GitHub via `resolveReviewThread`.
+
+---
+
+## Review Comments Addressed — 2026-04-30 (round 2)
+
+### Changes Made
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| `strategy` value `"MOBILE"`/`"DESKTOP"` may need to be lowercase for the API | @gemini-code-assist (AI) | False positive | Verified Google PageSpeed Insights API v5 spec via developers.google.com — `strategy` enum is `MOBILE` / `DESKTOP` uppercase. Cross-checked: `configs/pagespeed.yaml:66-68` defines the enum as uppercase, and the live smoke run has been validating uppercase against the real API since fork inception. Replied with explanation; no change. |
+| `server.stdin.write()` can emit async EPIPE when the child exits — would surface as an unhandled error | @gemini-code-assist (AI) | Fix needed | Added `server.stdin.on("error", ...)` near the existing `server.on("error", ...)` block in `scripts/smoke.ts`. Async EPIPE now becomes a recorded smoke failure with a precise message instead of crashing the test runner. |
+| Bare ` ``` ` opening fence at `docs/upstream-contributions.md:277` violates markdownlint MD040 | @coderabbitai (AI) | Fix needed | Added `text` language tag to the fence around the sequencing diagram. |
+| `npx tsx` in the `smoke` script pulls an unpinned `tsx` and is non-reproducible | @coderabbitai (AI) | Fix needed | Pinned `tsx@^4.20.0` in `devDependencies`, changed `"smoke"` from `"npx tsx scripts/smoke.ts"` → `"tsx scripts/smoke.ts"`, ran `npm install` to update `package-lock.json`. CI now resolves a single locked version. |
+| Race in smoke shutdown block: `serverExited` re-check between outer gate and listener registration is missing | @coderabbitai (AI) | Fix needed | Added an inner re-check inside the `new Promise` constructor: `if (serverExited) { resolve(); return; }`. Closes the microsecond window where the child exits between the outer gate and the `once("exit")` subscription. |
+| Two `server.once("exit", ...)` listeners registered in the same Promise — fragile and confusing | @coderabbitai (AI) | Fix needed | Consolidated into a single `once("exit")` handler that both clears the SIGTERM/SIGKILL timeouts and resolves the Promise. Timeout handles are declared with `let` outside the `setTimeout` calls so the consolidated handler can clear them. |
+
+### Decisions Revised
+| Original Decision | New Approach | Reason | Reviewer |
+|-------------------|-------------|--------|----------|
+| Smoke script depends on ambient `tsx` via `npx` for parity with the README invocation | Pin `tsx` as a devDependency and drop `npx` | CI must be deterministic; `npx tsx` re-resolves on every run and can drift. The `npx tsx /path/to/configs/pagespeed.ts` form in the README targets end users and is unaffected. | @coderabbitai |
+| Smoke shutdown block used two `once("exit")` listeners — one to resolve, one to clear timers | Consolidate to a single `once("exit")` handler that does both | Both listeners do fire on emit (the original concern that "only one will fire" is technically wrong), but a single handler is clearer, removes the closure-ordering concern, and lets the race re-check live alongside the listener registration. | @coderabbitai |
+
+### Resolved Todos
+_None — no PR-linked todos for #2._
+
+### Outstanding Todos
+_None — no follow-ups created from this pass._
+
+### Files Modified
+- `scripts/smoke.ts` — added `server.stdin.on("error", ...)`; consolidated dual `once("exit")` listeners into one handler with an inner race re-check.
+- `package.json` — pinned `tsx@^4.20.0` in `devDependencies`; changed `smoke` script to `tsx scripts/smoke.ts`.
+- `package-lock.json` — refreshed by `npm install` after the tsx pin.
+- `docs/upstream-contributions.md` — added `text` language tag to the sequencing-diagram fence.
+- `dist/` — rebuilt via `npm run build` (no source-of-truth changes; smoke is a dev-only script).
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 489 passed, 7 skipped — unchanged.
+- All 6 review threads resolved on GitHub via `resolveReviewThread`.

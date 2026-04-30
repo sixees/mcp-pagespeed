@@ -47,6 +47,14 @@ async function main(): Promise<void> {
     failures.push(`server spawn error: ${err.message}`);
   });
 
+  // Async EPIPE on stdin can fire after the child exits — without a listener
+  // Node would surface it as an unhandled error and crash the smoke run with
+  // a misleading stack trace. Recording the failure keeps the diagnostic in
+  // the same channel as every other smoke assertion.
+  server.stdin.on("error", (err) => {
+    failures.push(`server stdin error: ${err.message}`);
+  });
+
   let serverExited = false;
   let serverExitCode: number | null = null;
   let serverExitSignal: NodeJS.Signals | null = null;
@@ -224,21 +232,28 @@ async function main(): Promise<void> {
 
     // Wait for clean exit (stdin EOF should trigger graceful shutdown via
     // the MCP stdio transport). If the server doesn't exit within the grace
-    // window, escalate to SIGTERM, then SIGKILL.
+    // window, escalate to SIGTERM, then SIGKILL. The re-check inside the
+    // Promise closes a race where the child exits between the outer
+    // serverExited gate and listener registration.
     if (!serverExited) {
       await new Promise<void>((resolve) => {
-        const onExit = () => resolve();
-        server.once("exit", onExit);
-        const term = setTimeout(() => {
+        if (serverExited) {
+          resolve();
+          return;
+        }
+        let term: NodeJS.Timeout | undefined;
+        let kill: NodeJS.Timeout | undefined;
+        server.once("exit", () => {
+          if (term) clearTimeout(term);
+          if (kill) clearTimeout(kill);
+          resolve();
+        });
+        term = setTimeout(() => {
           if (!serverExited) server.kill("SIGTERM");
         }, SHUTDOWN_GRACE_MS);
-        const kill = setTimeout(() => {
+        kill = setTimeout(() => {
           if (!serverExited) server.kill("SIGKILL");
         }, SHUTDOWN_GRACE_MS * 2);
-        server.once("exit", () => {
-          clearTimeout(term);
-          clearTimeout(kill);
-        });
       });
     }
 

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-04-30
+
+### Security
+
+- **Prompt injection defense for HTTP response bodies** — cherry-picked from upstream mcp-curl `5f32c85` (PR #20). Sanitizes Unicode attack vectors (bidi overrides, zero-width chars, Tags block, variation selectors, soft hyphen) and collapses 50+-space whitespace-padding runs. Detection-only logger fires `[injection-defense] [hostname] InjectionDetected` to stderr at most once per hostname per minute on suspicious patterns; content is never suppressed (observability only)
+- **Tool metadata sanitization** — `registerCustomTool()` now sanitizes `title` and `description` and truncates description to 1000 chars; the `analyze_pagespeed` tool benefits transparently
+- **Spotlighting decision** — `enableSpotlighting` is intentionally NOT enabled in `configs/pagespeed.ts` because custom tools registered via `registerCustomTool()` bypass `tool-wrapper.ts`'s auto-wrap. Instead, the post-processor in `configs/pagespeed.ts` re-validates that `analyzed_url` matches the input URL exactly (defends against API-echoed payload smuggling). For belt-and-braces, the post-processed JSON may also be wrapped via `applySpotlighting(JSON.stringify(output), randomUUID())`. See `CLAUDE.md` `## Security`
+- **Process-lifecycle hardening** — `configs/pagespeed.ts` now wires `SIGINT`/`SIGTERM` to `server.shutdown()` so `startInjectionCleanup()`'s `setInterval` is cleared on process termination
+
+### Notes
+
+- Versions `3.0.3` and `3.1.0` are reserved (already-existing tags); the next free patch is `3.1.1`
+- `dist/` is rebuilt locally; bundle hashes diverge from upstream by design
+
 ## [3.0.2] - 2026-04-04
 
 ### Changed

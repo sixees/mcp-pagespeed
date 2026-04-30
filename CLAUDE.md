@@ -51,6 +51,14 @@ See [upstream docs](https://github.com/sixees/mcp-curl) for the full library API
 All mcp-curl security applies: SSRF protection, DNS rebinding prevention, rate limiting, input validation,
 file access controls, resource limits. `curl_execute` is disabled — only `analyze_pagespeed` can make requests.
 
+### Prompt-injection observability
+
+- HTTP response bodies are sanitized in `processResponse()` before reaching the LLM (Unicode attack-vector strip + 50+-space collapse).
+- Detection-only logger emits `[injection-defense] [pagespeedonline.googleapis.com] InjectionDetected` at most once per minute when a known injection keyword pattern is observed in a sanitized response. The analyzed `url` is intentionally NOT in the log — to investigate, correlate with the most recent `analyze_pagespeed` invocation in your logs.
+- The `enableSpotlighting` config flag does NOT auto-apply to `analyze_pagespeed`. Spotlighting wrappers in `tool-wrapper.ts` only run for the built-in `curl_execute` / `jq_query` tools; custom tools are dispatched via `server.registerTool()` and bypass the wrapper. The `analyze_pagespeed` post-processor in `configs/pagespeed.ts` instead validates that the API-echoed `analyzed_url` matches the input URL exactly; output may additionally be wrapped via `applySpotlighting()` for defence in depth.
+- `configs/pagespeed.ts` wires `SIGINT`/`SIGTERM` to `server.shutdown()` so `startInjectionCleanup()`'s `setInterval` is cleared on process termination — required for clean container shutdown.
+- Detection-logger uses a module-level `lastDetectedMap`. Tests that exercise `logInjectionDetected` MUST call `clearInjectionDetectionMap()` (from `src/lib/security/detection-logger.js`) in `beforeEach` — Vitest 4 isolates per file, not per test.
+
 ## Code Style
 
 - Modern ES6+ with strict TypeScript, ESM modules

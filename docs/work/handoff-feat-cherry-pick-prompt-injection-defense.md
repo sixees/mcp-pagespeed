@@ -403,3 +403,55 @@ _None — no follow-ups created from this pass._
 - `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
 - `npm test` 489 passed, 7 skipped — unchanged.
 - Both review threads resolved on GitHub via `resolveReviewThread`.
+
+## Review-Readiness Pass — 2026-04-30 (round 4)
+
+Comprehensive PR review run via `/pr-review-toolkit:review-pr` with focus on SRP/DRY, security, and TypeScript MCP best practices. Four parallel agents (`code-reviewer`, `silent-failure-hunter`, `comment-analyzer`, `pr-test-analyzer`) inspected the fork-side surface (`configs/pagespeed.ts`, `configs/pagespeed-helpers.ts`, `configs/pagespeed.yaml`, `scripts/smoke.ts`, docs, tests). Vendored `src/lib/**` is upstream byte-for-byte and out-of-scope for this PR's review.
+
+### Agent Verdicts
+- **code-reviewer**: "Yes — ship it." 1 important, 5 nice-to-haves; no security/data-loss/breaking-change blockers. Trust-boundary design (`trustedAnalyzedUrl` + `buildTrustedMeta`), error classification (`classifyApiError`), and pure dispatch (`pickPreset`) all well-factored. ESM/Zod/MCP SDK usage idiomatic.
+- **silent-failure-hunter**: 0 critical, 3 P3. Stderr-only logging with explicit `console.error` is intentional and consistent with the privacy posture. JSON-parse failure correctly fails closed.
+- **comment-analyzer**: 0 critical, 2 minor. Cross-references verified accurate (`mcp-curl-server.ts:413` shutdown-safety, `MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH` 1000-char limit, sanitize.ts `[WHITESPACE REMOVED]` marker, version 3.1.1 pin).
+- **pr-test-analyzer**: 67/67 unit tests passing, 22 test files, two-tier coverage (unit + e2e via `scripts/smoke.ts`). Conditional yes — handler dispatch is currently only validated end-to-end through smoke; recommended unit tests for handler URL-validation, non-JSON path, missing-lighthouseResult path. Deferred (would expand PR scope meaningfully).
+
+### Changes Made (in-scope)
+| Finding | Reviewer | Category | Action |
+|---------|----------|----------|--------|
+| `data` typed `Record<string, any>` — `data.error.code/.status/.message/.errors` accessed without guarding `data.error` is an object; `{"error": "string"}` echo would throw `TypeError` | code-reviewer | Defensive narrowing | Added `typeof data.error === "object"` guard at `configs/pagespeed.ts:204`. Falls through to the missing-lighthouseResult branch on a malformed echo, which already returns a closed-classification error. |
+| `"summary"` literal duplicated between audit-log path (`configs/pagespeed.ts:136`) and handler dispatch (`:243`) — drift risk | code-reviewer | SRP/DRY | Extracted `DEFAULT_PRESET = "summary"` to `configs/pagespeed-helpers.ts`. Both call sites now reference the constant; centralised so the audit log and dispatcher can't disagree. |
+| Comment "maxResultSize=2MB configured on server" hard-codes a value that lives in `MAX_RESULT_SIZE_BYTES` | comment-analyzer | Comment accuracy | Rewrote comment at `configs/pagespeed.ts:158-160` to reference the constant by name; future bumps to the limit no longer leave a stale "2MB" claim in the comment. |
+| `classifyApiError` lacks coverage for HTTP 503 (upstream unavailable) — would fall through to generic branch but no anchor test | pr-test-analyzer | Test coverage | Added test asserting `classifyApiError(503, undefined, undefined)` returns generic class containing "HTTP 503" and not "undefined". Locks the closed-classification contract for non-table codes. |
+| Rate-limit precedence not anchored — if Google sent `code=400` AND `errors[].reason="rateLimitExceeded"`, smoke-detection contract depends on reason winning over code | pr-test-analyzer | Test coverage | Added two precedence tests: `code=400` + reason and `code=0` + reason. Both must surface the `Set PAGESPEED_API_KEY` quota hint that `scripts/smoke.ts` greps for. |
+| `buildTrustedMeta` not tested for missing `data.id` (truncated/proxied response) | pr-test-analyzer | Test coverage | Added test for `buildTrustedMeta({}, ...)` — confirms `analyzed_url` substitutes input URL and warning is emitted rather than leaving `analyzed_url` undefined. |
+
+### Deferred (would expand PR scope)
+| Finding | Reviewer | Why deferred |
+|---------|----------|--------------|
+| `pickPreset` 5-arg signature — refactor to options object | code-reviewer | Touches public-ish helper signature and all preset callers. Not a defect; ergonomic only. |
+| `trustedAnalyzedUrl` purity — return `{ url, warning? }` instead of mutating `warnings[]` parameter | code-reviewer | Architectural refactor that ripples through `buildTrustedMeta` and the handler. The mutation pattern is internally consistent and documented. |
+| Extract handler URL-validation block into a pure function for unit testability | pr-test-analyzer | Would force a meaningful refactor of the handler's input-validation flow. Smoke + e2e coverage is adequate for the cherry-pick. |
+| Mocked-fetch tests for non-JSON / missing-lighthouseResult paths | pr-test-analyzer | Requires introducing MSW or equivalent into the test stack. Disproportionate for the cherry-pick. |
+| `result.isError` upstream classification surface in handler | silent-failure-hunter | Library-side concern; upstream `executeRequest` already classifies. |
+| `pagespeed.yaml` jqFilter clarity | code-reviewer | Documentation polish; current YAML is correct. |
+| Sync EPIPE handling in smoke `sendNotification` | silent-failure-hunter | Async EPIPE on stdin is already handled (round 2). Sync path is only reachable if stdin is closed before the call returns — vanishingly rare in practice. |
+
+### Resolved Todos
+_None — no PR-linked todos for #2._
+
+### Outstanding Todos
+_None — no follow-ups created from this pass._
+
+### Files Modified
+- `configs/pagespeed.ts` — `data.error` narrowing guard, `DEFAULT_PRESET` import + 2 call sites updated, comment correction at the executeRequest call.
+- `configs/pagespeed-helpers.ts` — exported `DEFAULT_PRESET = "summary"`.
+- `configs/pagespeed-helpers.test.ts` — 4 new tests (HTTP 503 generic, two rate-limit precedence cases, missing `data.id` in `buildTrustedMeta`).
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 493 passed, 7 skipped (was 489 / 7 before this pass — +4 new tests).
+
+### Merge Readiness
+- All blocking review findings addressed.
+- Trust boundary (`trustedAnalyzedUrl`), error classification (`classifyApiError`), and audit-log path are unit-anchored.
+- Smoke gate (`scripts/smoke.ts`) covers the e2e dispatch path with structural quota detection.
+- Recommended next: rebuild `dist/`, push, mark PR ready for review.

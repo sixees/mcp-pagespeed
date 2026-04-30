@@ -20,6 +20,12 @@ export const MAX_RESULT_SIZE_BYTES = 2_000_000;
 // PageSpeed analyses themselves take 15-45s; this is the outer cURL timeout.
 export const DEFAULT_TIMEOUT_SECONDS = 60;
 
+// Default filter_preset when the caller omits it. "summary" returns scores +
+// metrics + analyzed_url + strategy — the most useful single payload for an
+// LLM to reason about. Centralised here so the audit-log path and the handler
+// dispatch path can't drift.
+export const DEFAULT_PRESET = "summary";
+
 // Class-of-error string for the tool response. The 429 string preserves the
 // exact "Set PAGESPEED_API_KEY to use a higher quota." suffix that scripts/
 // smoke.ts greps for to classify quota-exhausted runs.

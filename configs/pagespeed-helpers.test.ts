@@ -223,6 +223,35 @@ describe("classifyApiError", () => {
     // No leakage of arbitrary message content; classification is closed.
     expect(msg).not.toContain("undefined");
   });
+
+  it("503 (upstream unavailable) yields generic HTTP-503 class", () => {
+    // 503 isn't in the explicit table — it must fall through to the
+    // generic branch and surface only the HTTP code, not "undefined" or
+    // any leaked field. Anchors the closed-classification contract.
+    const msg = classifyApiError(503, undefined, undefined);
+    expect(msg).toContain("HTTP 503");
+    expect(msg).not.toContain("undefined");
+  });
+
+  it("rate-limit reason wins over an explicit 400 code", () => {
+    // Defensive precedence: if Google sends both a 400-class code AND
+    // errors[].reason=rateLimitExceeded, the rate-limit hint must win
+    // so smoke.ts can detect quota exhaustion regardless of code.
+    const msg = classifyApiError(400, undefined, [
+      { reason: "rateLimitExceeded" },
+    ]);
+    expect(msg).toContain("Set PAGESPEED_API_KEY to use a higher quota.");
+    expect(msg).not.toContain("rejected the request");
+  });
+
+  it("rate-limit reason wins even with code 0 (no HTTP status)", () => {
+    // Edge case: data.error.code is missing/0 but the reason field is
+    // present. The classifier should still surface the rate-limit class.
+    const msg = classifyApiError(0, undefined, [
+      { reason: "rateLimitExceeded" },
+    ]);
+    expect(msg).toContain("Set PAGESPEED_API_KEY to use a higher quota.");
+  });
 });
 
 describe("buildTrustedMeta", () => {
@@ -263,6 +292,24 @@ describe("buildTrustedMeta", () => {
     const meta = buildTrustedMeta(data, "https://example.com/", "MOBILE", warnings);
     expect(meta.analyzed_url).toBe("https://example.com/");
     expect(warnings).toHaveLength(1);
+  });
+
+  it("falls back to inputUrl when data.id is missing entirely", () => {
+    // PageSpeed normally echoes the requested URL as data.id; if the
+    // field is absent (truncated/proxied response), trustedAnalyzedUrl
+    // must still substitute the input URL and emit a warning rather
+    // than leaving analyzed_url as undefined.
+    const data = {};
+    const warnings: string[] = [];
+    const meta = buildTrustedMeta(
+      data,
+      "https://example.com/",
+      "MOBILE",
+      warnings,
+    );
+    expect(meta.analyzed_url).toBe("https://example.com/");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("substituted");
   });
 });
 

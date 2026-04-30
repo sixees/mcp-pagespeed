@@ -24,6 +24,7 @@ import {
 import { getMethodAnnotations } from "mcp-curl/schema";
 import {
   CATEGORIES,
+  DEFAULT_PRESET,
   DEFAULT_TIMEOUT_SECONDS,
   MAX_RESULT_SIZE_BYTES,
   buildTrustedMeta,
@@ -133,7 +134,7 @@ try {
       // — full URL, query string, and any embedded auth are intentionally
       // excluded.
       if (process.env.PAGESPEED_AUDIT === "1") {
-        const auditPreset = filter_preset ?? "summary";
+        const auditPreset = filter_preset ?? DEFAULT_PRESET;
         const auditStrategy = (strategy ?? "MOBILE").toUpperCase();
         console.error(
           `[pagespeed] invoke target=${parsedInput.hostname} preset=${auditPreset} strategy=${auditStrategy}`,
@@ -155,8 +156,9 @@ try {
         apiUrl.searchParams.set(key, value);
       }
 
-      // Execute request via utilities (applies config defaults, SSRF checks)
-      // maxResultSize=2MB configured on server; response returned inline for parsing
+      // Execute request via utilities (applies config defaults, SSRF checks).
+      // maxResultSize is set to MAX_RESULT_SIZE_BYTES on the server above; the
+      // response returns inline for JSON parsing rather than auto-saving to disk.
       const result = await utils.executeRequest({
         url: apiUrl.toString(),
         method: "GET",
@@ -201,7 +203,7 @@ try {
       // include URL fragments, headers, or PII (regression of 2.0.1 minimal-
       // logging policy). Class string only; raw message available on stderr
       // behind PAGESPEED_DEBUG=1 for operator debugging.
-      if (data.error) {
+      if (data.error && typeof data.error === "object") {
         const code = Number(data.error.code) || 0;
         const status =
           typeof data.error.status === "string" ? data.error.status : undefined;
@@ -240,7 +242,7 @@ try {
         };
       }
 
-      const preset = filter_preset ?? "summary";
+      const preset = filter_preset ?? DEFAULT_PRESET;
       const warnings: string[] = [];
       const scores = extractScores(lighthouse);
       const metrics = extractMetrics(lighthouse);

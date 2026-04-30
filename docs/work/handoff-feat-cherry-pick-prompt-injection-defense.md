@@ -455,3 +455,27 @@ _None — no follow-ups created from this pass._
 - Trust boundary (`trustedAnalyzedUrl`), error classification (`classifyApiError`), and audit-log path are unit-anchored.
 - Smoke gate (`scripts/smoke.ts`) covers the e2e dispatch path with structural quota detection.
 - Recommended next: rebuild `dist/`, push, mark PR ready for review.
+
+## Review Comments Addressed — 2026-04-30 (round 5)
+
+### Changes Made
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| `scripts/smoke.ts` spawn `error` handler doesn't set `serverExited = true`, causing the `finally` block to wait forever for an `exit` event that may never fire (per Node docs, `error` may fire without a matching `exit`). Pending RPCs also burn the full timeout if the server dies mid-call. | @coderabbitai (AI) | Fix needed | Restructured `pending` Map to hold `{resolve, reject, timer}` tuples. Added `failPending(err)` helper that snapshots, clears, then `clearTimeout` + `reject` on each entry. Both terminal handlers now invoke it: `error` handler sets `serverExited = true` + calls `failPending` so the finally block doesn't hang on a never-spawned process; `exit` handler calls `failPending` so an in-flight `tools/call` rejects immediately instead of waiting the 90s timeout. Stdout JSON-RPC handler updated to read `entry.timer`/`entry.resolve` from the new tuple structure. |
+
+### Decisions Revised
+_None — this is a follow-on improvement to the original `error`/`exit` listener wiring, not a reversal._
+
+### Resolved Todos
+_None — no PR-linked todos for #2._
+
+### Outstanding Todos
+_None — no follow-ups created from this pass._
+
+### Files Modified
+- `scripts/smoke.ts` — `pending` Map restructured to `{resolve, reject, timer}` tuples; `failPending(err)` helper added; `error` handler sets `serverExited = true` and calls `failPending`; `exit` handler also calls `failPending`; stdout JSON-RPC handler updated to use the tuple shape.
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 493 passed, 7 skipped — unchanged.
+- Manual reasoning on race scenarios: late timer firing after `failPending` is a no-op (delete on already-cleared map + reject on already-rejected promise); late response after `failPending` is dropped because `pending.has(msg.id)` is false.

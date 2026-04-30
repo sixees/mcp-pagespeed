@@ -41,10 +41,43 @@ async function main(): Promise<void> {
 
   const failures: string[] = [];
 
-  // Surface spawn errors immediately rather than masquerading as a
-  // 10s initialize timeout.
+  // Pending JSON-RPC requests, keyed by id. Each entry carries the timer so
+  // a terminal child-process event (error/exit) can clear all pending timers
+  // and reject the awaiting senders immediately, instead of letting them
+  // wait the full per-request timeout (10s for initialize, 90s for tools/call).
+  type Pending = {
+    resolve: (resp: JsonRpcResponse) => void;
+    reject: (err: Error) => void;
+    timer: NodeJS.Timeout;
+  };
+  const pending: Map<number, Pending> = new Map();
+
+  // Snapshot before iterating — Map iteration is consistent across deletes,
+  // but explicit clear-then-iterate avoids any chance of an in-flight reject
+  // synchronously triggering a re-entry that would mutate the same map.
+  function failPending(err: Error): void {
+    const entries = [...pending.entries()];
+    pending.clear();
+    for (const [, p] of entries) {
+      clearTimeout(p.timer);
+      p.reject(err);
+    }
+  }
+
+  let serverExited = false;
+  let serverExitCode: number | null = null;
+  let serverExitSignal: NodeJS.Signals | null = null;
+
+  // Surface spawn errors immediately rather than masquerading as a 10s
+  // initialize timeout. Per Node docs, an "error" event may fire WITHOUT a
+  // matching "exit" (e.g. ENOENT during spawn), so the error handler must
+  // set serverExited so the finally block doesn't wait forever for an
+  // exit event that will never come. failPending() also rejects in-flight
+  // sendRequest() awaits so they don't burn the full timeout.
   server.on("error", (err) => {
     failures.push(`server spawn error: ${err.message}`);
+    serverExited = true;
+    failPending(new Error(`server error before response: ${err.message}`));
   });
 
   // Async EPIPE on stdin can fire after the child exits — without a listener
@@ -55,13 +88,20 @@ async function main(): Promise<void> {
     failures.push(`server stdin error: ${err.message}`);
   });
 
-  let serverExited = false;
-  let serverExitCode: number | null = null;
-  let serverExitSignal: NodeJS.Signals | null = null;
   server.on("exit", (code, signal) => {
     serverExited = true;
     serverExitCode = code;
     serverExitSignal = signal;
+    // If the server exits while requests are still in flight, reject them
+    // immediately instead of letting each one wait its full timeout. The
+    // existing exit-code check downstream still records the abnormal exit
+    // independently — these rejections only short-circuit the awaiting
+    // sendRequest() callers.
+    failPending(
+      new Error(
+        `server exited before responding (code=${code}, signal=${signal})`,
+      ),
+    );
   });
 
   let stderr = "";
@@ -83,7 +123,6 @@ async function main(): Promise<void> {
   });
 
   let stdoutBuf = "";
-  const pending: Map<number, (resp: JsonRpcResponse) => void> = new Map();
   server.stdout.on("data", (chunk) => {
     stdoutBuf += chunk.toString();
     const lines = stdoutBuf.split("\n");
@@ -93,8 +132,10 @@ async function main(): Promise<void> {
       try {
         const msg = JSON.parse(line) as JsonRpcResponse;
         if (typeof msg.id === "number" && pending.has(msg.id)) {
-          pending.get(msg.id)!(msg);
+          const entry = pending.get(msg.id)!;
+          clearTimeout(entry.timer);
           pending.delete(msg.id);
+          entry.resolve(msg);
         }
       } catch {
         // not JSON-RPC; ignore
@@ -115,10 +156,7 @@ async function main(): Promise<void> {
           ),
         );
       }, timeoutMs);
-      pending.set(req.id, (resp) => {
-        clearTimeout(timer);
-        resolve(resp);
-      });
+      pending.set(req.id, { resolve, reject, timer });
       server.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...req }) + "\n");
     });
   }

@@ -126,3 +126,103 @@ Tag: `3.1.1` (no `v` prefix).
 | File (removed) | Title | Summary | Resolved by | Date |
 |----------------|-------|---------|-------------|------|
 | — | — | — | — | — |
+
+---
+
+## Code Review — 2026-04-30
+
+### Review Summary
+
+- **Reviewer:** automated multi-agent review (`/sixees-workflow:review`)
+- **Focus areas (from invocation):** SRP/DRY, security, TypeScript MCP best practices
+- **Agents used:** code-simplicity-reviewer, security-sentinel, typescript-reviewer, pattern-recognition-specialist, agent-native-reviewer, silent-failure-hunter, learnings-researcher
+- **Findings:** 🔴 P1: 6 | 🟡 P2: 9 | 🔵 P3: 3 (consolidated and deduplicated from ~50 raw findings)
+- **Phase 6 (browser testing):** skipped — stdio MCP server has no browser surface
+
+### Handoff Assessment
+
+The builder's self-assessment is **honest and substantially complete**. Strengths:
+- "Risk areas" correctly flag `trustedAnalyzedUrl` as the security boundary and accurately note the boot-time `server.start()` failure path.
+- "Edge cases" correctly handle trailing-slash and percent-encoding normalization; explicitly call out the host-mismatch surprise.
+- "Test gaps" pre-disclose the missing unit tests for `trustedAnalyzedUrl` and the SIGINT handler — both reappear in this review's todos #012 and #005.
+- "Known issues" candidly admit smoke didn't exercise the live PageSpeed round-trip, dist hash divergence, and the per-file Vitest 4 isolation gotcha.
+
+Gaps (issues the builder did not surface but this review found):
+- The **JSON.parse silent-fallback** at `configs/pagespeed.ts:208-214` bypasses the entire `trustedAnalyzedUrl` validation — this is on the documented security boundary and was not flagged. (P1 — see todo #001.)
+- The **post-registration shutdown failure path** ("if `server.shutdown()` rejects") was not analysed — only the boot-time pre-registration race was discussed. (P1 — todo #005.)
+- The **CHANGELOG/CLAUDE.md `applySpotlighting` claim** ("output may also be wrapped via …") describes a control that is not wired. The hedging language ("may") is misleading because every adjacent claim is wired. (P2 — todo #010.)
+- The **`tsc --noEmit` clean** claim is true but does not cover `configs/` or `scripts/` — `tsconfig.json` includes only `src/**/*`. The fork-specific code added in this PR was not type-checked by the documented gate. (P1 — todo #004.)
+- **`scripts/smoke.ts` indent style** (4-space) diverges from the entire rest of the repo (2-space). The handoff "Pattern deviations" discusses the new `scripts/` directory but not its formatting. (P1 — todo #006.)
+
+Net: handoff is in the top quartile of self-assessments. The builder surfaced the "right kind" of risks but missed the silent-failure class — JSON.parse fallback, shutdown rejection, and phantom-control documentation are exactly the issues a reviewer-distinct-from-the-builder is meant to catch.
+
+### Verified Claims
+
+| Handoff Claim | Verified? | Notes |
+|---------------|-----------|-------|
+| 459 tests pass, 7 skipped, 21 files | yes | `npm test` re-run during review |
+| All 18 cherry-picked files at upstream parity (SHA `5f32c85`) | yes (sampled) | Spot-checked 4 files via `git diff 5f32c85 -- <path>` per the suggested review order |
+| All 7 fork-divergent files preserved | yes | Diff against `main^` shows none of the listed paths touched |
+| Tag `3.1.1` created locally | yes | `git tag --list` |
+| `npx tsc --noEmit` clean | partial | Clean for `src/**/*`; **does not cover `configs/` or `scripts/`** — see P1 finding #004 |
+| dist sentinels `WHITESPACE REMOVED`, `injection-defense`, `InjectionDetected` present | yes | `grep` against `dist/chunk-*.js` |
+| `trustedAnalyzedUrl` returns inputUrl on mismatch | yes | Code inspection — but invisible to LLM (P2 finding #011) |
+| SIGINT/SIGTERM wired | yes | Code inspection — but error path unguarded (P1 finding #005) |
+| `analyze_pagespeed` post-processor "validates analyzed_url matches input URL exactly" | yes, mostly | True on success path; **bypassed** when `JSON.parse` fails (P1 finding #001) |
+| "Output may additionally be wrapped via `applySpotlighting()`" | **no** | Phantom control — not wired (P2 finding #010) |
+
+### Key Findings
+
+| ID | Severity | Category | Description | Todo File |
+|----|----------|----------|-------------|-----------|
+| 001 | 🔴 P1 | security / silent-failure | `JSON.parse` catch returns raw library response, bypassing `trustedAnalyzedUrl` validation entirely | `docs/todos/001-pending-p1-json-parse-silent-fallback.md` |
+| 002 | 🔴 P1 | silent-failure / quality | `scripts/smoke.ts` has no spawn `error`/`exit` listeners; quota soft-skip is over-permissive; stderr buffer unbounded; kill without exit-code check | `docs/todos/002-pending-p1-smoke-script-silent-failures.md` |
+| 003 | 🔴 P1 | spr-dry / architecture | `buildOutput` conflates dispatch + extraction + trust validation; fragile to new presets | `docs/todos/003-pending-p1-build-output-srp-violation.md` |
+| 004 | 🔴 P1 | typescript / false-confidence | `tsconfig.json` excludes `configs/` and `scripts/`; "tsc clean" claim doesn't cover the cherry-pick's fork-specific code | `docs/todos/004-pending-p1-tsc-coverage-gap.md` |
+| 005 | 🔴 P1 | typescript / silent-failure | SIGINT/SIGTERM handler has no try/catch around `server.shutdown()`; no re-entrancy guard | `docs/todos/005-pending-p1-shutdown-handler-error-handling.md` |
+| 006 | 🔴 P1 | quality / patterns | `scripts/smoke.ts` uses 4-space indent vs repo's 2-space; inconsistent log prefix | `docs/todos/006-pending-p1-smoke-script-pattern-violations.md` |
+| 007 | 🟡 P2 | security / quality | `trustedAnalyzedUrl` brittle to query-param reordering | `docs/todos/007-pending-p2-trusted-url-search-param-ordering.md` |
+| 008 | 🟡 P2 | security / observability | `data.error.message` surfaced verbatim regresses 2.0.1 minimal-logging policy | `docs/todos/008-pending-p2-error-message-leakage.md` |
+| 009 | 🟡 P2 | security | `lighthouse.configSettings?.formFactor` (strategy) is API-echoed and unvalidated | `docs/todos/009-pending-p2-strategy-roundtrip-validation.md` |
+| 010 | 🟡 P2 | security / docs | CHANGELOG and CLAUDE.md describe `applySpotlighting()` as wired but it isn't | `docs/todos/010-pending-p2-applyspotlighting-phantom-control.md` |
+| 011 | 🟡 P2 | agent-native / security | `trustedAnalyzedUrl` mismatch is invisible to the LLM | `docs/todos/011-pending-p2-trusted-url-mismatch-invisible-to-llm.md` |
+| 012 | 🟡 P2 | quality / testing | No unit tests for `trustedAnalyzedUrl` or signal handler (acknowledged by builder) | `docs/todos/012-pending-p2-trusted-url-unit-tests.md` |
+| 013 | 🟡 P2 | spr-dry | Input URL parsed three times across handler and helper | `docs/todos/013-pending-p2-duplicate-url-parsing.md` |
+| 014 | 🟡 P2 | patterns / spr-dry | Inline tool annotations should use `getMethodAnnotations()` helper | `docs/todos/014-pending-p2-tool-annotations-helper.md` |
+| 015 | 🟡 P2 | agent-native / docs | Tool description doesn't disclose post-processing or trust boundaries | `docs/todos/015-pending-p2-tool-description-trust-boundary-disclosure.md` |
+| 016 | 🔵 P3 | quality | Magic numbers (`2_000_000`, `60`) should be named constants | `docs/todos/016-pending-p3-magic-numbers-constants.md` |
+| 017 | 🔵 P3 | observability | `[injection-defense]` log lines lack correlation with `analyze_pagespeed` invocation | `docs/todos/017-pending-p3-detection-logger-correlation.md` |
+| 018 | 🔵 P3 | docs | README.md doesn't link to CHANGELOG/CLAUDE.md security sections | `docs/todos/018-pending-p3-readme-changelog-link.md` |
+
+### Outstanding Todos
+<!-- Todos created during this review — see docs/todos/ for full content -->
+
+| File | Priority | Description | Source |
+|------|----------|-------------|--------|
+| docs/todos/001-pending-p1-json-parse-silent-fallback.md | P1 | JSON.parse fallback bypasses analyzed_url validation | code-review |
+| docs/todos/002-pending-p1-smoke-script-silent-failures.md | P1 | Smoke script silent failure modes | code-review |
+| docs/todos/003-pending-p1-build-output-srp-violation.md | P1 | buildOutput SRP violation | code-review |
+| docs/todos/004-pending-p1-tsc-coverage-gap.md | P1 | tsconfig excludes configs/ and scripts/ | code-review |
+| docs/todos/005-pending-p1-shutdown-handler-error-handling.md | P1 | Shutdown handler swallows rejections | code-review |
+| docs/todos/006-pending-p1-smoke-script-pattern-violations.md | P1 | Smoke script indent + log prefix drift | code-review |
+| docs/todos/007-pending-p2-trusted-url-search-param-ordering.md | P2 | trustedAnalyzedUrl brittle to search reordering | code-review |
+| docs/todos/008-pending-p2-error-message-leakage.md | P2 | API error message verbatim leakage | code-review |
+| docs/todos/009-pending-p2-strategy-roundtrip-validation.md | P2 | Strategy round-trip unvalidated | code-review |
+| docs/todos/010-pending-p2-applyspotlighting-phantom-control.md | P2 | Phantom applySpotlighting documentation | code-review |
+| docs/todos/011-pending-p2-trusted-url-mismatch-invisible-to-llm.md | P2 | Mismatch invisible to LLM (agent-native) | code-review |
+| docs/todos/012-pending-p2-trusted-url-unit-tests.md | P2 | Missing unit tests for fork helpers | code-review |
+| docs/todos/013-pending-p2-duplicate-url-parsing.md | P2 | Triple URL parse / single source of truth | code-review |
+| docs/todos/014-pending-p2-tool-annotations-helper.md | P2 | Use library annotations helper | code-review |
+| docs/todos/015-pending-p2-tool-description-trust-boundary-disclosure.md | P2 | Tool description trust boundary disclosure | code-review |
+| docs/todos/016-pending-p3-magic-numbers-constants.md | P3 | Named constants for magic numbers | code-review |
+| docs/todos/017-pending-p3-detection-logger-correlation.md | P3 | Detection-log correlation gap | code-review |
+| docs/todos/018-pending-p3-readme-changelog-link.md | P3 | README → CHANGELOG/CLAUDE.md security link | code-review |
+
+### Blockers
+
+The 6 P1 findings collectively block merge in their current strict-block sense, but they cluster into three themes that can be batched:
+
+1. **Trust-boundary completeness** (#001 + #003 + #005) — JSON.parse fallback, buildOutput SRP, shutdown error handling. All of them say "the documented compensating controls have a quiet escape hatch." Fix once, fix together.
+2. **CI/quality-gate coverage** (#002 + #004 + #006) — smoke script silent failures, tsc not covering fork code, indent drift. Together they say "the gates we're claiming aren't actually closing." Mechanical, low-risk fixes.
+
+If the immediate goal is to ship this PR, the minimum-viable subset is **#001 (security control bypass)** and **#004 (claim-vs-reality alignment)**. The other four can land as a follow-up commit on the same branch before merge. Recommend not merging until at least those two are resolved.

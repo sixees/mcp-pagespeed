@@ -307,3 +307,32 @@ All 3 P3 findings from the multi-agent review were addressed in a third sweep. T
 
 ### Net result
 All 6 P1 + 9 P2 + 3 P3 review findings closed across three sweeps. No outstanding gates.
+
+---
+
+## Review Comments Addressed — 2026-04-30
+
+### Changes Made
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| Signal handlers registered after `await server.start("stdio")` — tiny race window if SIGTERM arrives before handler registration | @agent-optibot (AI) | Fix needed | Moved `process.on("SIGINT"/"SIGTERM", shutdown)` to **before** `await server.start("stdio")`. `server.shutdown()` is documented at `mcp-curl-server.ts:413` as safe to call when not started (early-returns when `!this._started`), so pre-start signals exit cleanly without leaking the `setInterval` that `startInjectionCleanup()` will create during `start()`. Comment block updated to explain the ordering. |
+| `result.content[0].text` accessed without null/bounds check at `tool-wrapper.ts:38` | @agent-optibot (AI) | False positive | File is upstream-vendored byte-for-byte from `mcp-curl@5f32c85`. Inline block comment at lines 19-31 documents the type-system invariant (`ToolResult.content` is the tuple `[{ type: "text"; text: string }]`). Modifying would break parity. Replied with explanation; if the concern is real it belongs upstream, not in the fork. Also noted: the wrapper only runs for built-in tools (`curl_execute`, `jq_query`); `analyze_pagespeed` bypasses it via `registerCustomTool()`. |
+
+### Decisions Revised
+| Original Decision | New Approach | Reason | Reviewer |
+|-------------------|-------------|--------|----------|
+| Signal handlers registered after `await server.start("stdio")` (handoff "Risk areas" section addressed only the boot-time race, not the post-start handler-registration window) | Register signal handlers before `server.start()` | The post-start window is real (microsecond-scale), and `server.shutdown()` is safe to call before start completes — there's no reason to leave the gap open. | @agent-optibot |
+
+### Resolved Todos
+_None — no PR-linked todos for #2._
+
+### Outstanding Todos
+_None — no follow-ups created from this pass._
+
+### Files Modified
+- `configs/pagespeed.ts` — moved signal-handler registration above `await server.start("stdio")`; updated explanatory comment.
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 489 passed, 7 skipped — unchanged.
+- Both review threads resolved on GitHub via `resolveReviewThread`.

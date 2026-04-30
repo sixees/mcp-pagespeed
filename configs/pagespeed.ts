@@ -255,11 +255,12 @@ try {
     },
   );
 
-  await server.start("stdio");
-
-  // Wire signal handlers so startInjectionCleanup()'s setInterval is cleared
-  // on container/orchestrator shutdown. Without this, the process hangs on
-  // SIGTERM until SIGKILL because the timer keeps the event loop alive.
+  // Wire signal handlers BEFORE server.start() so a signal arriving in the
+  // window between start() returning and handler registration can't slip
+  // through. server.shutdown() is documented as safe to call even if the
+  // server was never started (early-returns when !this._started), so a
+  // pre-start signal cleanly exits without leaking the setInterval that
+  // startInjectionCleanup() will create during start().
   // Re-entrancy guard prevents double-shutdown when an orchestrator sends
   // SIGTERM twice; try/catch surfaces shutdown failures via exit code 1
   // instead of an unhandled rejection.
@@ -280,6 +281,8 @@ try {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+
+  await server.start("stdio");
 } catch (error) {
   console.error("Failed to start PageSpeed MCP server:", error);
   process.exitCode = 1;

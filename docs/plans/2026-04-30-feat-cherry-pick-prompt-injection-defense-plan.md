@@ -1,7 +1,7 @@
 ---
 title: "feat: Cherry-pick prompt injection defense from upstream mcp-curl"
 type: feat
-status: active
+status: completed
 date: 2026-04-30
 ---
 

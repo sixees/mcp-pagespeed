@@ -2,10 +2,12 @@
 name: buildOutput conflates dispatch, extraction, and trust validation
 description: configs/pagespeed.ts buildOutput() picks a preset, runs extractors, and re-validates the analyzed URL all in one function — the third concern is the security boundary, and burying it inside a "build output" helper hides it from review
 type: task
-status: pending
+status: complete
 priority: p1
 issue_id: 003
 tags: [code-review, spr-dry, architecture, security]
+resolved_date: 2026-04-30
+resolution: Option A (split into pure functions)
 ---
 
 # buildOutput conflates dispatch, extraction, and trust validation
@@ -80,6 +82,12 @@ Move `trustedAnalyzedUrl` into the handler body adjacent to the `data.id` access
 ## Work Log
 
 - 2026-04-30: Filed during code review of `feat/cherry-pick-prompt-injection-defense`.
+- 2026-04-30: **Resolved.** Replaced `buildOutput` with two pure functions in `configs/pagespeed.ts:84-108`:
+  - `buildTrustedMeta(data, lighthouse, inputUrl)` — single home for every API-echoed field that round-trips into LLM context. Currently returns `{ analyzed_url, strategy }`; the analyzed_url goes through `trustedAnalyzedUrl()`. Strategy retains the unvalidated `lighthouse.configSettings?.formFactor` echo with an inline `// see docs/todos/009` comment marking the pending validation work.
+  - `pickPreset(preset, scores, metrics, meta)` — pure dispatch. `scores` and `metrics` presets return their respective extracts; `summary` returns `{ scores, metrics, ...meta }`.
+  - The handler at `configs/pagespeed.ts:279-283` reads as a four-line readout: extract scores, extract metrics, build trusted meta, pick preset. Reviewers see the trust boundary in `buildTrustedMeta` without needing to trace control flow through preset branches.
+  - Type-safety bonus: `pickPreset` parameter types use `ReturnType<typeof extractScores>` etc., so adding fields to extractors propagates through automatically.
+  - Verification: `npm test` 459 pass / 7 skipped. `npm run typecheck` clean.
 
 ## Resources
 

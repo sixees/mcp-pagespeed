@@ -2,10 +2,12 @@
 name: tsconfig.json doesn't include configs/ or scripts/
 description: tsconfig.json's include is "src/**/*" so npx tsc --noEmit silently skips configs/pagespeed.ts and scripts/smoke.ts — the handoff's "type-check clean" claim does not cover the fork-specific code at all
 type: task
-status: pending
+status: complete
 priority: p1
 issue_id: 004
 tags: [code-review, typescript, false-confidence]
+resolved_date: 2026-04-30
+resolution: Option A (separate tsconfig.fork.json + npm typecheck script)
 ---
 
 # tsconfig.json doesn't type-check configs/ or scripts/
@@ -71,6 +73,9 @@ Add `"configs/**/*"` and `"scripts/**/*"` to `tsconfig.json`'s `include`, and bu
 ## Work Log
 
 - 2026-04-30: Filed during code review of `feat/cherry-pick-prompt-injection-defense`.
+- 2026-04-30: **Resolved.** Added `tsconfig.fork.json` extending the main config with `noEmit: true`, `rootDir: "."`, and `include: ["configs/**/*.ts", "scripts/**/*.ts"]`. Added `"typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.fork.json"` to `package.json` scripts. `tsup`'s explicit entry list (verified in `tsup.config.ts`) means the new include doesn't pull configs/scripts into the published bundle.
+  - Baseline run (before any other P1 fixes) was clean — no latent type errors in the fork code despite never being checked. Re-running after the #001/#003/#005 refactor of `configs/pagespeed.ts` and the #002/#006 rewrite of `scripts/smoke.ts` is also clean.
+  - Followups: CI should call `npm run typecheck` alongside `npm test` (handoff's "Configure PAGESPEED_API_KEY in CI" item is the natural place to bundle this).
 
 ## Resources
 

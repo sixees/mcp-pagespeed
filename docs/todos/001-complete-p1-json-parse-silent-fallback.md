@@ -2,10 +2,12 @@
 name: JSON.parse silent fallback bypasses analyzed_url validation
 description: When the API response is auto-saved to file (or returns malformed JSON), pagespeed.ts returns the raw library result and silently skips the trustedAnalyzedUrl re-validation step that the security model relies on
 type: task
-status: pending
+status: complete
 priority: p1
 issue_id: 001
 tags: [code-review, security, silent-failure]
+resolved_date: 2026-04-30
+resolution: Option A (fail closed) implemented in configs/pagespeed.ts:218-239
 ---
 
 # JSON.parse silent fallback bypasses analyzed_url validation
@@ -74,6 +76,9 @@ Inspect `result.content` for the library's auto-save sentinel (path response). I
 ## Work Log
 
 - 2026-04-30: Filed during code review of `feat/cherry-pick-prompt-injection-defense`.
+- 2026-04-30: **Resolved.** Replaced the silent `return result` fallback with a fail-closed branch at `configs/pagespeed.ts:218-239`: emits a stderr line classifying the response (no content leak, preserves 2.0.1 minimal-logging policy) and returns `{ isError: true, content: [{ text: "Error: PageSpeed API returned a non-JSON response." }] }`. The trust boundary (`trustedAnalyzedUrl`) now has no quiet escape hatch — the only way to ship content past it is through the success path.
+  - Test gap acknowledged: no fork-side unit test exercises the new branch (consolidated with todo #012 — same module). Manual trace shows the branch is reached only when `JSON.parse(resultText)` throws, which today means truncation, malformed proxy response, or a >2 MB auto-saved file. None of these are reachable in a normal Google round-trip; PageSpeed responses are 200–800 KB.
+  - Verification: `npm test` 459 pass / 7 skipped (unchanged). `npm run typecheck` clean (new gate added in #004). `npm run smoke` exercises the success and quota paths; the new error path is not exercised by smoke (would need a fault-injection harness).
 
 ## Resources
 

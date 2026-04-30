@@ -2,10 +2,12 @@
 name: SIGINT/SIGTERM handler swallows shutdown() failures and re-entrancy
 description: configs/pagespeed.ts shutdown handler awaits server.shutdown() with no try/catch; if shutdown rejects, the rejection is unhandled, process.exit(0) never runs, and a second signal triggers a parallel shutdown
 type: task
-status: pending
+status: complete
 priority: p1
 issue_id: 005
 tags: [code-review, typescript, silent-failure, process-lifecycle]
+resolved_date: 2026-04-30
+resolution: Option A (re-entrancy guard + try/catch + discriminated exit code)
 ---
 
 # SIGINT/SIGTERM handler swallows shutdown() failures and re-entrancy
@@ -83,6 +85,12 @@ Eliminates re-entrancy by removing the listener after first fire, but doesn't so
 ## Work Log
 
 - 2026-04-30: Filed during code review of `feat/cherry-pick-prompt-injection-defense`.
+- 2026-04-30: **Resolved.** Updated `configs/pagespeed.ts:301-315`:
+  - **Re-entrancy guard:** module-scoped `let shuttingDown = false` flips on first signal; subsequent signals return early. Eliminates double-call on K8s graceful + forced shutdown.
+  - **Try/catch around `server.shutdown()`:** rejection is caught, logged with the error class name (`(err as Error).name` — preserves 2.0.1 minimal-logging policy by not logging the message body), and `process.exit(1)` runs. Orchestrators can now distinguish "graceful shutdown" (exit 0) from "graceful-shutdown attempted, failed" (exit 1).
+  - The error log uses `[pagespeed]` bracket prefix (consistent with the existing `received ${signal}` line); the entry/error path of the handler still uses `pagespeed:` colon prefix in other places — that wider convention drift is logged separately under the P3-class observation set but isn't load-bearing here.
+  - Test gap acknowledged: no fork-side unit test for the rejection path. Consolidated with todo #012 — the same test file should mock `server.shutdown()` to reject and assert exit code 1.
+  - Verification: `npm test` 459 pass / 7 skipped. `npm run typecheck` clean.
 
 ## Resources
 

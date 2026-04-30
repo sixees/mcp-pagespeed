@@ -2,10 +2,12 @@
 name: scripts/smoke.ts uses 4-space indentation and inconsistent log prefix
 description: The new smoke script uses 4-space indent vs the repo's 2-space convention (see configs/pagespeed.ts) and mixes log prefix styles — small but visible deviations that future hands will copy
 type: task
-status: pending
+status: complete
 priority: p1
 issue_id: 006
 tags: [code-review, quality, patterns]
+resolved_date: 2026-04-30
+resolution: Option B (reformat + .editorconfig); original P1 framing was overstated, see Work Log
 ---
 
 # scripts/smoke.ts uses 4-space indentation and inconsistent log prefix
@@ -70,6 +72,17 @@ charset = utf-8
 ## Work Log
 
 - 2026-04-30: Filed during code review of `feat/cherry-pick-prompt-injection-defense`.
+- 2026-04-30: **Resolved with caveat — original framing overstated.** When implementing the fix, re-checked indent conventions across the repo:
+  - `configs/pagespeed.ts`, `configs/pagespeed-agent-test.ts` → 2-space (fork-only code).
+  - `src/lib/**/*.ts` → 4-space (vendored upstream; preserving the 4-space matches upstream and keeps diffs minimal).
+  - `tsup.config.ts` → 4-space (top-level config).
+  - `scripts/smoke.ts` → was 4-space.
+
+  So `scripts/smoke.ts`'s 4-space indent was *not* the lone outlier the original finding implied — it matched `tsup.config.ts` and the bulk of the vendored source. The honest framing: this is a coin-flip style choice between "match `configs/`" and "match `tsup.config.ts` + `src/lib/`". Reformatting to 2-space because (a) `configs/` is the closer sibling — both are deliberate fork-only code, while `src/lib/` is preserved-upstream so its style is incidental; (b) `.editorconfig` now locks the convention so future scripts don't have to make this judgment call; (c) `tsup.config.ts` can be reformatted in a follow-up if desired but isn't load-bearing for this PR.
+
+- 2026-04-30: **Resolved.** Reformatted `scripts/smoke.ts` to 2-space indent in the same rewrite as #002. Standardised log prefix to `[smoke]` for harness lines; dropped the `[server]` decoration on stderr passthrough since the server's own `pagespeed:` / `[pagespeed]` / `[injection-defense]` prefixes already provide context (decorating with `[server]` was redundant). Added `.editorconfig` at repo root: 2-space for `configs/**.ts` and `scripts/**.ts`; 4-space for `src/lib/**.ts` (preserves upstream parity).
+  - Severity in retrospect: this should have been P3 (style) not P1 (blocking). The P1 was justified only on the strength of "no other 2-space deviations exist" which turned out to be wrong. The fix is still worth shipping because `.editorconfig` future-proofs the convention, but reviewers reading this todo set should weight the original P1 lower than its label suggests.
+  - Verification: `npm run smoke` runs successfully with the rewritten file; output format `[smoke] [SKIP] ...` / `[smoke] [OK] ...` is human-readable and CI-greppable.
 
 ## Resources
 

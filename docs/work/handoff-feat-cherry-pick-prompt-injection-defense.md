@@ -121,11 +121,16 @@ Tag: `3.1.1` (no `v` prefix).
 | docs/todos/cache-utilities.md | Low | `server.utilities()` re-creates `InstanceUtilities` on every call; could be cached after `start()`. Pre-existing TODO; not introduced by this work. | Pre-existing |
 
 ### Resolved Todos
-<!-- None this session. -->
+<!-- Resolved during the post-review P1 sweep on 2026-04-30. Files retained at `*-complete-*` per repo convention; not deleted. -->
 
-| File (removed) | Title | Summary | Resolved by | Date |
-|----------------|-------|---------|-------------|------|
-| — | — | — | — | — |
+| File | Title | Summary | Resolved by | Date |
+|------|-------|---------|-------------|------|
+| `docs/todos/001-complete-p1-json-parse-silent-fallback.md` | JSON.parse silent fallback bypasses analyzed_url validation | Replaced silent catch-and-return with fail-closed: stderr line + `isError: true` MCP response. The trust boundary (`trustedAnalyzedUrl`) now has no quiet escape hatch on parse failure. | code-review P1 sweep | 2026-04-30 |
+| `docs/todos/002-complete-p1-smoke-script-silent-failures.md` | Smoke script silently swallows server-side failures | Wired `error`/`exit` listeners on the spawned child; replaced regex quota detection with structural `QUOTA_HINT` tag-handshake; bounded stderr at 64 KB; exit-await with SIGTERM (2s) → SIGKILL (4s) escalation. | code-review P1 sweep | 2026-04-30 |
+| `docs/todos/003-complete-p1-build-output-srp-violation.md` | buildOutput conflates dispatch, extraction, trust validation | Split into `buildTrustedMeta()` (single home for API-echoed fields that round-trip into LLM context) and `pickPreset()` (pure dispatch). Trust boundary now visible to reviewers as one named function. | code-review P1 sweep | 2026-04-30 |
+| `docs/todos/004-complete-p1-tsc-coverage-gap.md` | tsconfig.json doesn't include configs/ or scripts/ | Added `tsconfig.fork.json` (extends main, `noEmit: true`, `rootDir: "."`) and `npm run typecheck` script that runs both configs sequentially. Fork-specific code now type-checked under strict mode. | code-review P1 sweep | 2026-04-30 |
+| `docs/todos/005-complete-p1-shutdown-handler-error-handling.md` | SIGINT/SIGTERM handler swallows shutdown failures and re-entrancy | Added module-scoped re-entrancy guard, try/catch around `await server.shutdown()`, discriminated exit code (1 on failure). Orchestrators can now distinguish graceful from failed-graceful shutdown. | code-review P1 sweep | 2026-04-30 |
+| `docs/todos/006-complete-p1-smoke-script-pattern-violations.md` | Smoke script indent and log-prefix drift | Reformatted `scripts/smoke.ts` to 2-space indent (matching `configs/`); standardised harness log prefix to `[smoke]`; added `.editorconfig` locking 2-space for `configs/`+`scripts/`, 4-space for `src/lib/` (preserves upstream parity). Original P1 framing was overstated — see todo Work Log. | code-review P1 sweep | 2026-04-30 |
 
 ---
 
@@ -195,16 +200,10 @@ Net: handoff is in the top quartile of self-assessments. The builder surfaced th
 | 018 | 🔵 P3 | docs | README.md doesn't link to CHANGELOG/CLAUDE.md security sections | `docs/todos/018-pending-p3-readme-changelog-link.md` |
 
 ### Outstanding Todos
-<!-- Todos created during this review — see docs/todos/ for full content -->
+<!-- Todos created during this review — see docs/todos/ for full content. The 6 P1 entries have been resolved; see "Resolved Todos" above. -->
 
 | File | Priority | Description | Source |
 |------|----------|-------------|--------|
-| docs/todos/001-pending-p1-json-parse-silent-fallback.md | P1 | JSON.parse fallback bypasses analyzed_url validation | code-review |
-| docs/todos/002-pending-p1-smoke-script-silent-failures.md | P1 | Smoke script silent failure modes | code-review |
-| docs/todos/003-pending-p1-build-output-srp-violation.md | P1 | buildOutput SRP violation | code-review |
-| docs/todos/004-pending-p1-tsc-coverage-gap.md | P1 | tsconfig excludes configs/ and scripts/ | code-review |
-| docs/todos/005-pending-p1-shutdown-handler-error-handling.md | P1 | Shutdown handler swallows rejections | code-review |
-| docs/todos/006-pending-p1-smoke-script-pattern-violations.md | P1 | Smoke script indent + log prefix drift | code-review |
 | docs/todos/007-pending-p2-trusted-url-search-param-ordering.md | P2 | trustedAnalyzedUrl brittle to search reordering | code-review |
 | docs/todos/008-pending-p2-error-message-leakage.md | P2 | API error message verbatim leakage | code-review |
 | docs/todos/009-pending-p2-strategy-roundtrip-validation.md | P2 | Strategy round-trip unvalidated | code-review |
@@ -220,9 +219,33 @@ Net: handoff is in the top quartile of self-assessments. The builder surfaced th
 
 ### Blockers
 
-The 6 P1 findings collectively block merge in their current strict-block sense, but they cluster into three themes that can be batched:
+**Update 2026-04-30 (post-review P1 sweep):** All 6 P1 findings resolved. See "Resolved Todos" table above and the Post-Review Resolution section below. No remaining merge blockers; the 9 outstanding P2s and 3 P3s are follow-up work, not gates.
+
+Original triage (kept for historical context):
 
 1. **Trust-boundary completeness** (#001 + #003 + #005) — JSON.parse fallback, buildOutput SRP, shutdown error handling. All of them say "the documented compensating controls have a quiet escape hatch." Fix once, fix together.
 2. **CI/quality-gate coverage** (#002 + #004 + #006) — smoke script silent failures, tsc not covering fork code, indent drift. Together they say "the gates we're claiming aren't actually closing." Mechanical, low-risk fixes.
 
-If the immediate goal is to ship this PR, the minimum-viable subset is **#001 (security control bypass)** and **#004 (claim-vs-reality alignment)**. The other four can land as a follow-up commit on the same branch before merge. Recommend not merging until at least those two are resolved.
+---
+
+## Post-Review Resolution — 2026-04-30
+
+All 6 P1 findings from the multi-agent review were addressed in a single sweep. Themes:
+
+### Trust-boundary completeness (#001, #003, #005)
+- **`configs/pagespeed.ts:218-239`** — `JSON.parse` failure no longer silently returns the raw library response. Now emits a `pagespeed:` stderr line with the error class name (preserves 2.0.1 minimal-logging) and returns an `isError: true` MCP response. The fail-closed path is the only escape from `trustedAnalyzedUrl`.
+- **`configs/pagespeed.ts:84-108`** — `buildOutput()` decomposed into `buildTrustedMeta()` (single home for API-echoed fields that round-trip into LLM context: `analyzed_url`, `strategy`) and `pickPreset()` (pure dispatch). The trust boundary is now one named function, not buried inside a switch.
+- **`configs/pagespeed.ts:301-315`** — Shutdown handler hardened: module-scoped `shuttingDown` flag prevents re-entry on second signal; try/catch around `await server.shutdown()`; failed shutdown logs the error class name and exits with code 1 so orchestrators can distinguish graceful from failed-graceful shutdown.
+
+### Quality-gate coverage (#002, #004, #006)
+- **`tsconfig.fork.json`** (new) + `npm run typecheck` (new) — Fork-specific code (`configs/`, `scripts/`) now type-checked under strict mode. `tsup`'s explicit entry list keeps the new include from polluting the published bundle.
+- **`scripts/smoke.ts`** — Rewritten with `error`/`exit` listeners on the spawned child, structural quota detection via `QUOTA_HINT` tag-handshake (string emitted by the server only when `data.error.status === "RESOURCE_EXHAUSTED"`), bounded stderr at 64 KB, exit-await with SIGTERM (2s) → SIGKILL (4s) escalation. No more silent-success or false-positive soft-skips.
+- **`.editorconfig`** (new) — Locks 2-space for `configs/**.ts` + `scripts/**.ts`, 4-space for `src/lib/**.ts` (preserves upstream parity). Note: the original P1 severity for #006 was overstated — `scripts/smoke.ts`'s 4-space matched `tsup.config.ts` and `src/lib/`, so it wasn't the lone outlier the finding implied. Resolved anyway because `.editorconfig` future-proofs the convention.
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 459 passed, 7 skipped — unchanged from baseline.
+- `npm run smoke` ran end-to-end on quota-exhausted IP — soft-skip path correctly classified via `QUOTA_HINT`, harness exited 0 in <30s.
+
+### Test gaps (acknowledged, not in this sweep)
+- No fork-side unit tests for the JSON.parse fail-closed path or the SIGINT rejection path. Both consolidated under todo #012 as a single follow-up.

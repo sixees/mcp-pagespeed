@@ -7,6 +7,7 @@
 //   - response shape (scores object exists)
 //   - no [WHITESPACE REMOVED] markers in post-processed output
 //   - no [injection-defense] log lines on stderr (clean URL)
+//   - server child exits cleanly
 // Exits non-zero on any deviation. Intended for `npm run smoke` and CI.
 
 import { spawn } from "node:child_process";
@@ -15,149 +16,254 @@ import { setTimeout as sleep } from "node:timers/promises";
 const TARGET_URL = process.env.SMOKE_URL ?? "https://example.com";
 const STARTUP_GRACE_MS = 2_000;
 const TOOL_CALL_TIMEOUT_MS = 90_000;
+const SHUTDOWN_GRACE_MS = 2_000;
+const MAX_STDERR_BYTES = 64 * 1024;
+
+// Exact suffix the server adds when it has classified the API error as a
+// rate-limit (configs/pagespeed.ts builds this hint conditionally on
+// data.error.status === "RESOURCE_EXHAUSTED" or errors[].reason ===
+// "rateLimitExceeded"). Anchoring to this string makes quota detection
+// structural — the server tagged the response, we trust the tag.
+const QUOTA_HINT = "Set PAGESPEED_API_KEY to use a higher quota.";
 
 type JsonRpcResponse = {
-    jsonrpc: "2.0";
-    id?: number;
-    result?: any;
-    error?: { code: number; message: string };
+  jsonrpc: "2.0";
+  id?: number;
+  result?: any;
+  error?: { code: number; message: string };
 };
 
 async function main(): Promise<void> {
-    const server = spawn("npx", ["tsx", "configs/pagespeed.ts"], {
-        stdio: ["pipe", "pipe", "pipe"],
-        env: process.env,
-    });
+  const server = spawn("npx", ["tsx", "configs/pagespeed.ts"], {
+    stdio: ["pipe", "pipe", "pipe"],
+    env: process.env,
+  });
 
-    let stderr = "";
-    server.stderr.on("data", (chunk) => {
-        const text = chunk.toString();
-        stderr += text;
-        process.stderr.write(`[server] ${text}`);
-    });
+  const failures: string[] = [];
 
-    let stdoutBuf = "";
-    const pending: Map<number, (resp: JsonRpcResponse) => void> = new Map();
-    server.stdout.on("data", (chunk) => {
-        stdoutBuf += chunk.toString();
-        const lines = stdoutBuf.split("\n");
-        stdoutBuf = lines.pop() ?? "";
-        for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-                const msg = JSON.parse(line) as JsonRpcResponse;
-                if (typeof msg.id === "number" && pending.has(msg.id)) {
-                    pending.get(msg.id)!(msg);
-                    pending.delete(msg.id);
-                }
-            } catch {
-                // not JSON-RPC; ignore
-            }
+  // Surface spawn errors immediately rather than masquerading as a
+  // 10s initialize timeout.
+  server.on("error", (err) => {
+    failures.push(`server spawn error: ${err.message}`);
+  });
+
+  let serverExited = false;
+  let serverExitCode: number | null = null;
+  let serverExitSignal: NodeJS.Signals | null = null;
+  server.on("exit", (code, signal) => {
+    serverExited = true;
+    serverExitCode = code;
+    serverExitSignal = signal;
+  });
+
+  let stderr = "";
+  let stderrTruncated = false;
+  server.stderr.on("data", (chunk) => {
+    const text = chunk.toString();
+    process.stderr.write(text);
+    if (stderr.length >= MAX_STDERR_BYTES) {
+      if (!stderrTruncated) {
+        stderrTruncated = true;
+        failures.push(
+          `stderr exceeded ${MAX_STDERR_BYTES} bytes — server is unexpectedly chatty`,
+        );
+      }
+      return;
+    }
+    const remaining = MAX_STDERR_BYTES - stderr.length;
+    stderr += text.length > remaining ? text.slice(0, remaining) : text;
+  });
+
+  let stdoutBuf = "";
+  const pending: Map<number, (resp: JsonRpcResponse) => void> = new Map();
+  server.stdout.on("data", (chunk) => {
+    stdoutBuf += chunk.toString();
+    const lines = stdoutBuf.split("\n");
+    stdoutBuf = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const msg = JSON.parse(line) as JsonRpcResponse;
+        if (typeof msg.id === "number" && pending.has(msg.id)) {
+          pending.get(msg.id)!(msg);
+          pending.delete(msg.id);
         }
+      } catch {
+        // not JSON-RPC; ignore
+      }
+    }
+  });
+
+  function sendRequest(
+    req: { id: number; method: string; params?: unknown },
+    timeoutMs: number,
+  ): Promise<JsonRpcResponse> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(req.id);
+        reject(
+          new Error(
+            `Request id=${req.id} (${req.method}) timed out after ${timeoutMs}ms`,
+          ),
+        );
+      }, timeoutMs);
+      pending.set(req.id, (resp) => {
+        clearTimeout(timer);
+        resolve(resp);
+      });
+      server.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...req }) + "\n");
     });
+  }
 
-    function sendRequest(req: { id: number; method: string; params?: unknown }, timeoutMs: number): Promise<JsonRpcResponse> {
-        return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
-                pending.delete(req.id);
-                reject(new Error(`Request id=${req.id} (${req.method}) timed out after ${timeoutMs}ms`));
-            }, timeoutMs);
-            pending.set(req.id, (resp) => {
-                clearTimeout(timer);
-                resolve(resp);
-            });
-            server.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...req }) + "\n");
-        });
+  function sendNotification(method: string, params?: unknown): void {
+    server.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
+  }
+
+  try {
+    await sleep(STARTUP_GRACE_MS);
+
+    if (serverExited) {
+      throw new Error(
+        `server exited during startup (code=${serverExitCode}, signal=${serverExitSignal})`,
+      );
     }
 
-    function sendNotification(method: string, params?: unknown): void {
-        server.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
+    const initResp = await sendRequest(
+      {
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {},
+          clientInfo: { name: "smoke", version: "1.0" },
+        },
+      },
+      10_000,
+    );
+    if (!initResp.result) {
+      failures.push(
+        `initialize failed: ${JSON.stringify(initResp.error ?? initResp)}`,
+      );
+      throw new Error("initialize failed");
     }
 
-    const failures: string[] = [];
+    sendNotification("notifications/initialized");
 
+    const callResp = await sendRequest(
+      {
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "analyze_pagespeed",
+          arguments: { url: TARGET_URL, filter_preset: "summary" },
+        },
+      },
+      TOOL_CALL_TIMEOUT_MS,
+    );
+
+    if (!callResp.result) {
+      failures.push(
+        `tools/call returned no result: ${JSON.stringify(callResp.error ?? callResp)}`,
+      );
+    } else if (callResp.result.isError) {
+      const text = callResp.result.content?.[0]?.text ?? "";
+      // Structural detection: server appends QUOTA_HINT only when it
+      // explicitly classified data.error as rate-limited. No regex on
+      // arbitrary content.
+      const isQuotaExhaustion =
+        text.includes(QUOTA_HINT) && !process.env.PAGESPEED_API_KEY;
+      if (isQuotaExhaustion) {
+        console.warn(
+          `\n[smoke] [SKIP] PageSpeed API daily quota exhausted on shared/unauthenticated IP. ` +
+            `Set PAGESPEED_API_KEY for a real smoke check. Server bootstrap + MCP handshake validated.`,
+        );
+      } else {
+        failures.push(
+          `tools/call returned isError=true: ${text.slice(0, 300)}`,
+        );
+      }
+    } else {
+      const text = callResp.result.content?.[0]?.text ?? "";
+      if (text.includes("[WHITESPACE REMOVED]")) {
+        failures.push(
+          `response contains [WHITESPACE REMOVED] marker (sanitizer fired on summary output)`,
+        );
+      }
+      try {
+        const parsed = JSON.parse(text);
+        if (
+          !parsed ||
+          typeof parsed !== "object" ||
+          !parsed.scores ||
+          typeof parsed.scores !== "object"
+        ) {
+          failures.push(
+            `response missing scores object: ${text.slice(0, 200)}`,
+          );
+        }
+      } catch (e) {
+        failures.push(
+          `response is not valid JSON: ${(e as Error).message}; head=${text.slice(0, 200)}`,
+        );
+      }
+    }
+
+    if (stderr.includes("[injection-defense]")) {
+      failures.push(
+        `stderr contains [injection-defense] log on clean URL ${TARGET_URL}`,
+      );
+    }
+  } catch (err) {
+    failures.push(`smoke threw: ${(err as Error).message}`);
+  } finally {
     try {
-        await sleep(STARTUP_GRACE_MS);
-
-        const initResp = await sendRequest({
-            id: 1,
-            method: "initialize",
-            params: {
-                protocolVersion: "2024-11-05",
-                capabilities: {},
-                clientInfo: { name: "smoke", version: "1.0" },
-            },
-        }, 10_000);
-        if (!initResp.result) {
-            failures.push(`initialize failed: ${JSON.stringify(initResp.error ?? initResp)}`);
-            throw new Error("initialize failed");
-        }
-
-        sendNotification("notifications/initialized");
-
-        const callResp = await sendRequest({
-            id: 2,
-            method: "tools/call",
-            params: {
-                name: "analyze_pagespeed",
-                arguments: { url: TARGET_URL, filter_preset: "summary" },
-            },
-        }, TOOL_CALL_TIMEOUT_MS);
-
-        if (!callResp.result) {
-            failures.push(`tools/call returned no result: ${JSON.stringify(callResp.error ?? callResp)}`);
-        } else if (callResp.result.isError) {
-            const text = callResp.result.content?.[0]?.text ?? "";
-            const isQuotaExhaustion =
-                text.includes("429") &&
-                /(quota|rate ?limit)/i.test(text) &&
-                !process.env.PAGESPEED_API_KEY;
-            if (isQuotaExhaustion) {
-                console.warn(
-                    `\n[SKIP] PageSpeed API daily quota exhausted on shared/unauthenticated IP. ` +
-                        `Set PAGESPEED_API_KEY for a real smoke check. Server bootstrap + MCP handshake validated.`,
-                );
-            } else {
-                failures.push(`tools/call returned isError=true: ${text.slice(0, 300)}`);
-            }
-        } else {
-            const text = callResp.result.content?.[0]?.text ?? "";
-            if (text.includes("[WHITESPACE REMOVED]")) {
-                failures.push(`response contains [WHITESPACE REMOVED] marker (sanitizer fired on summary output)`);
-            }
-            try {
-                const parsed = JSON.parse(text);
-                if (!parsed || typeof parsed !== "object" || !parsed.scores || typeof parsed.scores !== "object") {
-                    failures.push(`response missing scores object: ${text.slice(0, 200)}`);
-                }
-            } catch (e) {
-                failures.push(`response is not valid JSON: ${(e as Error).message}; head=${text.slice(0, 200)}`);
-            }
-        }
-
-        if (stderr.includes("[injection-defense]")) {
-            failures.push(`stderr contains [injection-defense] log on clean URL ${TARGET_URL}`);
-        }
-    } catch (err) {
-        failures.push(`smoke threw: ${(err as Error).message}`);
-    } finally {
-        try {
-            server.stdin.end();
-        } catch { /* ignore */ }
-        await sleep(300);
-        server.kill();
+      server.stdin.end();
+    } catch {
+      // ignore
     }
 
-    if (failures.length > 0) {
-        console.error("\n[FAIL] smoke failed with the following issues:");
-        for (const f of failures) console.error(`  - ${f}`);
-        process.exit(1);
+    // Wait for clean exit (stdin EOF should trigger graceful shutdown via
+    // the MCP stdio transport). If the server doesn't exit within the grace
+    // window, escalate to SIGTERM, then SIGKILL.
+    if (!serverExited) {
+      await new Promise<void>((resolve) => {
+        const onExit = () => resolve();
+        server.once("exit", onExit);
+        const term = setTimeout(() => {
+          if (!serverExited) server.kill("SIGTERM");
+        }, SHUTDOWN_GRACE_MS);
+        const kill = setTimeout(() => {
+          if (!serverExited) server.kill("SIGKILL");
+        }, SHUTDOWN_GRACE_MS * 2);
+        server.once("exit", () => {
+          clearTimeout(term);
+          clearTimeout(kill);
+        });
+      });
     }
-    console.log(`\n[OK] smoke passed for ${TARGET_URL}`);
-    process.exit(0);
+
+    // A non-zero exit that wasn't caused by our own SIGTERM/SIGKILL escalation
+    // means the server died while we were still talking to it — surface it.
+    if (
+      serverExitCode !== null &&
+      serverExitCode !== 0 &&
+      serverExitSignal !== "SIGTERM" &&
+      serverExitSignal !== "SIGKILL"
+    ) {
+      failures.push(`server exited with code ${serverExitCode}`);
+    }
+  }
+
+  if (failures.length > 0) {
+    console.error("\n[smoke] [FAIL] smoke failed with the following issues:");
+    for (const f of failures) console.error(`  - ${f}`);
+    process.exit(1);
+  }
+  console.log(`\n[smoke] [OK] passed for ${TARGET_URL}`);
+  process.exit(0);
 }
 
 main().catch((err) => {
-    console.error("[FAIL] smoke top-level error:", err);
-    process.exit(1);
+  console.error("[smoke] [FAIL] top-level error:", err);
+  process.exit(1);
 });

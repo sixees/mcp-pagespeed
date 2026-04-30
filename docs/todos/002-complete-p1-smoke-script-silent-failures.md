@@ -2,10 +2,12 @@
 name: Smoke script silently swallows server-side failures
 description: scripts/smoke.ts has no spawn error/exit listeners, an over-permissive quota soft-skip, and an unbounded stderr accumulator — multiple paths return success-or-skip when the real signal is "the server died"
 type: task
-status: pending
+status: complete
 priority: p1
 issue_id: 002
 tags: [code-review, silent-failure, quality]
+resolved_date: 2026-04-30
+resolution: Option A (wire listeners) + Option B's structural quota detection
 ---
 
 # Smoke script silently swallows server-side failures
@@ -65,6 +67,12 @@ Drop the quota detection entirely; require `PAGESPEED_API_KEY` for `npm run smok
 ## Work Log
 
 - 2026-04-30: Filed during code review of `feat/cherry-pick-prompt-injection-defense`.
+- 2026-04-30: **Resolved.** Rewrote `scripts/smoke.ts` (with reformat from #006). Changes:
+  - **Spawn listeners.** `server.on("error", ...)` records spawn failures (e.g. `tsx not found`) as a recorded failure with the OS-level reason. `server.on("exit", ...)` captures exit code/signal so a server that dies mid-call is surfaced rather than masked as a 10-second initialize timeout. Pre-startup-grace exit now throws explicitly.
+  - **Structural quota detection.** Replaced the `text.includes("429") && /(quota|rate ?limit)/i.test(text)` regex with `text.includes(QUOTA_HINT)` where `QUOTA_HINT = "Set PAGESPEED_API_KEY to use a higher quota."` — that exact string is appended by `configs/pagespeed.ts:251` only when the server has classified `data.error.status === "RESOURCE_EXHAUSTED"` or `errors[].reason === "rateLimitExceeded"`. The check is now a tag-based handshake between server and smoke harness; arbitrary content containing "429" no longer short-circuits to SKIP.
+  - **Bounded stderr.** `MAX_STDERR_BYTES = 64 * 1024`. Overflow records a failure ("server is unexpectedly chatty") and stops accumulating; the script no longer risks OOM on a chatty server.
+  - **Exit-await.** After `stdin.end()`, the harness waits for `'exit'` (graceful via stdio EOF), escalating to `SIGTERM` after 2s and `SIGKILL` after 4s. Exit code surfaced as a failure when non-zero and not from our own escalation.
+  - Verification: `npm run smoke` ran end-to-end on quota-exhausted IP — soft-skip path classified correctly via `QUOTA_HINT`, server stderr clean, harness exited 0 in <30s.
 
 ## Resources
 

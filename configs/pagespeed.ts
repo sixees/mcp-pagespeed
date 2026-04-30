@@ -81,20 +81,30 @@ function trustedAnalyzedUrl(echoed: unknown, inputUrl: string): string {
   return inputUrl;
 }
 
-function buildOutput(
+// Single home for every API-echoed field that round-trips into LLM context.
+// Adding a new echoed field? Validate it here, not at the call site.
+function buildTrustedMeta(
   data: Record<string, any>,
   lighthouse: Record<string, any>,
-  preset: string,
   inputUrl: string,
 ) {
-  if (preset === "scores") return extractScores(lighthouse);
-  if (preset === "metrics") return extractMetrics(lighthouse);
   return {
-    scores: extractScores(lighthouse),
-    metrics: extractMetrics(lighthouse),
     analyzed_url: trustedAnalyzedUrl(data.id, inputUrl),
+    // Round-trip from input; not yet validated (see docs/todos/009).
     strategy: lighthouse.configSettings?.formFactor,
   };
+}
+
+// Pure dispatch. No security logic — that lives in buildTrustedMeta.
+function pickPreset(
+  preset: string,
+  scores: ReturnType<typeof extractScores>,
+  metrics: ReturnType<typeof extractMetrics>,
+  meta: ReturnType<typeof buildTrustedMeta>,
+) {
+  if (preset === "scores") return scores;
+  if (preset === "metrics") return metrics;
+  return { scores, metrics, ...meta };
 }
 
 try {
@@ -205,12 +215,27 @@ try {
         .map((c) => c.text)
         .join("\n");
 
-      // Parse JSON response
+      // Parse JSON response. Fail closed: a non-JSON body (truncation,
+      // auto-save-to-file path, malformed proxy response) means
+      // trustedAnalyzedUrl() can't run, and the fork's trust model says
+      // unvalidated content must not reach the LLM. Generic message keeps
+      // 2.0.1's minimal-logging policy.
       let data: Record<string, any>;
       try {
         data = JSON.parse(resultText);
       } catch {
-        return result; // not JSON (or auto-saved to file), return as-is
+        console.error(
+          "pagespeed: non-JSON response; rejecting (trust validation cannot run)",
+        );
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Error: PageSpeed API returned a non-JSON response.",
+            },
+          ],
+          isError: true,
+        };
       }
 
       // Surface API-level errors (rate limits, auth failures, etc.) clearly
@@ -252,7 +277,10 @@ try {
       }
 
       const preset = filter_preset ?? "summary";
-      const output = buildOutput(data, lighthouse, preset, url);
+      const scores = extractScores(lighthouse);
+      const metrics = extractMetrics(lighthouse);
+      const meta = buildTrustedMeta(data, lighthouse, url);
+      const output = pickPreset(preset, scores, metrics, meta);
 
       return {
         content: [
@@ -267,10 +295,23 @@ try {
   // Wire signal handlers so startInjectionCleanup()'s setInterval is cleared
   // on container/orchestrator shutdown. Without this, the process hangs on
   // SIGTERM until SIGKILL because the timer keeps the event loop alive.
+  // Re-entrancy guard prevents double-shutdown when an orchestrator sends
+  // SIGTERM twice; try/catch surfaces shutdown failures via exit code 1
+  // instead of an unhandled rejection.
+  let shuttingDown = false;
   const shutdown = async (signal: NodeJS.Signals) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.error(`[pagespeed] received ${signal}, shutting down`);
-    await server.shutdown();
-    process.exit(0);
+    try {
+      await server.shutdown();
+      process.exit(0);
+    } catch (err) {
+      console.error(
+        `[pagespeed] shutdown failed: ${(err as Error).name ?? "Error"}`,
+      );
+      process.exit(1);
+    }
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);

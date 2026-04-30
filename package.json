@@ -45,7 +45,8 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smoke": "npx tsx scripts/smoke.ts"
+    "smoke": "npx tsx scripts/smoke.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.fork.json"
   },
   "keywords": [
     "mcp",

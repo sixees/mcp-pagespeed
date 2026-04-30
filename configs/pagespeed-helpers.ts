@@ -3,12 +3,27 @@
 // in pagespeed.ts). All round-trip-validation logic lives here; pagespeed.ts
 // is the boot script.
 
+// `as const` so the literal types propagate; otherwise CATEGORIES would widen
+// to string[] and the handler couldn't depend on it being one of the four
+// known Lighthouse category names. Same reasoning for PRESETS below.
 export const CATEGORIES = [
   "PERFORMANCE",
   "ACCESSIBILITY",
   "BEST_PRACTICES",
   "SEO",
-];
+] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+// Single source of truth for the filter_preset domain. Shared by:
+//   - DEFAULT_PRESET (the omit-default)
+//   - pickPreset()'s preset parameter (compile-time guard against typos)
+//   - the handler's args cast in configs/pagespeed.ts
+// The runtime values must stay in lockstep with configs/pagespeed.yaml's
+// `filterPresets` block — that's what the generated Zod input schema accepts
+// from MCP callers, so any drift would let a string through here that
+// wouldn't have validated upstream.
+export const PRESETS = ["scores", "metrics", "summary"] as const;
+export type FilterPreset = (typeof PRESETS)[number];
 
 // 2 MB cap before the underlying library auto-saves the response to disk
 // instead of returning it inline. Lighthouse JSON for a typical page lands
@@ -24,7 +39,7 @@ export const DEFAULT_TIMEOUT_SECONDS = 60;
 // metrics + analyzed_url + strategy — the most useful single payload for an
 // LLM to reason about. Centralised here so the audit-log path and the handler
 // dispatch path can't drift.
-export const DEFAULT_PRESET = "summary";
+export const DEFAULT_PRESET: FilterPreset = "summary";
 
 // Class-of-error string for the tool response. The 429 string preserves the
 // exact "Set PAGESPEED_API_KEY to use a higher quota." suffix that scripts/
@@ -142,9 +157,11 @@ export function buildTrustedMeta(
 
 // Pure dispatch. Surfaces warnings on every preset (an analyzed_url
 // substitution is meaningful even when the LLM picked filter_preset=scores
-// and won't see analyzed_url itself).
+// and won't see analyzed_url itself). The FilterPreset union lets TypeScript
+// reject typos at the call site rather than silently falling through to the
+// summary branch.
 export function pickPreset(
-  preset: string,
+  preset: FilterPreset,
   scores: ReturnType<typeof extractScores>,
   metrics: ReturnType<typeof extractMetrics>,
   meta: ReturnType<typeof buildTrustedMeta>,

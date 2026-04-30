@@ -479,3 +479,27 @@ _None — no follow-ups created from this pass._
 - `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
 - `npm test` 493 passed, 7 skipped — unchanged.
 - Manual reasoning on race scenarios: late timer firing after `failPending` is a no-op (delete on already-cleared map + reject on already-rejected promise); late response after `failPending` is dropped because `pending.has(msg.id)` is false.
+
+## Review Comments Addressed — 2026-04-30 (round 6)
+
+### Changes Made
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| `pickPreset()` accepts raw `string`; a typo silently falls through to summary. Type the preset domain (and `CATEGORIES`) as `as const` literal unions per the project's coding guideline ("Use TypeScript enums, union types, or constant objects (`as const`) for role/status/value domains"). | @coderabbitai (AI) | Fix needed | `CATEGORIES` is now `as const` with derived `Category` type. Added `PRESETS = ["scores", "metrics", "summary"] as const` and derived `FilterPreset` union. `DEFAULT_PRESET: FilterPreset = "summary"`. `pickPreset(preset: FilterPreset, ...)`. Handler's args cast in `configs/pagespeed.ts` narrowed to `filter_preset?: FilterPreset` — safe because the Zod-generated input schema (built from `configs/pagespeed.yaml`'s `filterPresets`) already validates the value at the MCP boundary. PRESETS docstring notes the YAML lockstep contract so future drift is caught. |
+
+### Decisions Revised
+_None — this aligns the helpers with the project's `as const` coding guideline rather than reversing a prior decision._
+
+### Resolved Todos
+_None — no PR-linked todos for #2._
+
+### Outstanding Todos
+_None — no follow-ups created from this pass._
+
+### Files Modified
+- `configs/pagespeed-helpers.ts` — `CATEGORIES` `as const` + `Category` type; new `PRESETS`/`FilterPreset`; typed `DEFAULT_PRESET` and `pickPreset` parameter.
+- `configs/pagespeed.ts` — `FilterPreset` import; handler args cast narrowed.
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 493 passed, 7 skipped — unchanged.

@@ -32,6 +32,7 @@ import {
   extractMetrics,
   extractScores,
   pickPreset,
+  type FilterPreset,
 } from "./pagespeed-helpers.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,10 +89,14 @@ try {
       annotations: getMethodAnnotations("GET"),
     },
     async (args, _extra) => {
+      // The Zod input schema generated from configs/pagespeed.yaml has
+      // already validated filter_preset against PRESETS at the boundary,
+      // so narrowing to FilterPreset here is safe and lets pickPreset
+      // reject typos at compile time.
       const { url, strategy, filter_preset } = args as {
         url: string;
         strategy?: string;
-        filter_preset?: string;
+        filter_preset?: FilterPreset;
       };
 
       // Parse the input URL exactly once. The parsed object is passed

@@ -10,6 +10,16 @@ export const CATEGORIES = [
   "SEO",
 ];
 
+// 2 MB cap before the underlying library auto-saves the response to disk
+// instead of returning it inline. Lighthouse JSON for a typical page lands
+// around 200-600 KB; 2 MB gives headroom for sites with many third-party
+// scripts without normalising responses through the file path.
+export const MAX_RESULT_SIZE_BYTES = 2_000_000;
+
+// 60s fallback used only if the YAML schema doesn't define `defaults.timeout`.
+// PageSpeed analyses themselves take 15-45s; this is the outer cURL timeout.
+export const DEFAULT_TIMEOUT_SECONDS = 60;
+
 // Class-of-error string for the tool response. The 429 string preserves the
 // exact "Set PAGESPEED_API_KEY to use a higher quota." suffix that scripts/
 // smoke.ts greps for to classify quota-exhausted runs.

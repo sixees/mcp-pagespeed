@@ -140,6 +140,9 @@ Tag: `3.1.1` (no `v` prefix).
 | `docs/todos/013-complete-p2-duplicate-url-parsing.md` | Duplicate URL parsing across handler/helper | Single `new URL(url)` parse at handler top; `trustedInput = parsedInput.toString()` flows through API URL construction and trust validation. The "validated" URL and the "trusted" URL are now the same canonical string. | code-review P2 sweep | 2026-04-30 |
 | `docs/todos/014-complete-p2-tool-annotations-helper.md` | Inline annotations vs library helper | `annotations: getMethodAnnotations("GET")` (imported from `mcp-curl/schema` subpath export) replaces the inline `{ readOnlyHint, openWorldHint }`. Single source of truth restored; future library additions land for free. | code-review P2 sweep | 2026-04-30 |
 | `docs/todos/015-complete-p2-tool-description-trust-boundary-disclosure.md` | Tool description doesn't disclose trust boundary | Description gains a "Trust boundary" section disclosing analyzed_url re-validation, the warnings array on substitution, and response sanitisation. Total length 809 chars — under the upstream 1000-char cap. | code-review P2 sweep | 2026-04-30 |
+| `docs/todos/016-complete-p3-magic-numbers-constants.md` | Magic numbers should be named constants | `2_000_000` and `60` lifted into `MAX_RESULT_SIZE_BYTES` and `DEFAULT_TIMEOUT_SECONDS` in `configs/pagespeed-helpers.ts:13-22` (alongside `CATEGORIES`). Each carries an inline comment explaining the unit + rationale; `configs/pagespeed.ts` imports both. | code-review P3 sweep | 2026-04-30 |
+| `docs/todos/017-complete-p3-detection-logger-correlation.md` | Detection-logger entries lack correlation with analyze_pagespeed invocation | New opt-in `PAGESPEED_AUDIT=1` env var emits one hostname-only `[pagespeed] invoke target=<host> preset=<preset> strategy=<strategy>` line per invocation. Off by default (preserves the 2.0.1 minimal-logging policy and the privacy posture of `[injection-defense]`). Documented in CLAUDE.md, configs/pagespeed.ts header, and README.md. | code-review P3 sweep | 2026-04-30 |
+| `docs/todos/018-complete-p3-readme-changelog-link.md` | README.md does not link to CHANGELOG security updates | README.md Security section gains a paragraph about the 3.1.1 prompt-injection defense (sanitisation, detection logging, trust-boundary helper) with explicit links to CLAUDE.md `## Security` and CHANGELOG.md. Environment Variables table also gains the `PAGESPEED_AUDIT` row. No duplication of security details — README defers to canonical docs. | code-review P3 sweep | 2026-04-30 |
 
 ---
 
@@ -209,15 +212,13 @@ Net: handoff is in the top quartile of self-assessments. The builder surfaced th
 | 018 | 🔵 P3 | docs | README.md doesn't link to CHANGELOG/CLAUDE.md security sections | `docs/todos/018-pending-p3-readme-changelog-link.md` |
 
 ### Outstanding Todos
-<!-- Todos created during this review — see docs/todos/ for full content. The 6 P1 and 9 P2 entries have been resolved; see "Resolved Todos" above and the post-review sweep sections below. -->
+<!-- Todos created during this review — see docs/todos/ for full content. All 6 P1 + 9 P2 + 3 P3 entries have been resolved; see "Resolved Todos" above and the post-review sweep sections below. -->
 
-| File | Priority | Description | Source |
-|------|----------|-------------|--------|
-| docs/todos/016-pending-p3-magic-numbers-constants.md | P3 | Named constants for magic numbers | code-review |
-| docs/todos/017-pending-p3-detection-logger-correlation.md | P3 | Detection-log correlation gap | code-review |
-| docs/todos/018-pending-p3-readme-changelog-link.md | P3 | README → CHANGELOG/CLAUDE.md security link | code-review |
+_None — all P1, P2, and P3 review findings closed._
 
 ### Blockers
+
+**Update 2026-04-30 (post-review P3 sweep):** All 6 P1 + 9 P2 + 3 P3 findings resolved. No merge gates remaining.
 
 **Update 2026-04-30 (post-review P2 sweep):** All 6 P1 + 9 P2 findings resolved. The 3 P3s are follow-up work, not gates.
 
@@ -281,3 +282,28 @@ All 9 P2 findings from the multi-agent review were addressed in a second sweep. 
 
 ### Test gaps (acknowledged, not in this sweep)
 - Helper tests use mocked `console.error`; they don't assert that the throttled warning *would* fire on a real run. The detection-logger has its own per-file isolation tests (cherry-picked from upstream); the fork-side `console.error` line in `trustedAnalyzedUrl` is exercised by the existing fallback-path test cases through the warnings array.
+
+---
+
+## Post-Review Resolution — 2026-04-30 (P3 sweep)
+
+All 3 P3 findings from the multi-agent review were addressed in a third sweep. Themes:
+
+### Readability / quality (#016)
+- **`configs/pagespeed-helpers.ts:13-22`** — `MAX_RESULT_SIZE_BYTES = 2_000_000` and `DEFAULT_TIMEOUT_SECONDS = 60` placed alongside `CATEGORIES`. Each carries a short comment explaining the unit and the rationale (typical Lighthouse JSON sizes for the result-size cap; outer cURL timeout vs the 15-45s analysis duration for the timeout fallback). `configs/pagespeed.ts` imports both — the inline `2_000_000` at the `configure()` call and the `?? 60` fallback at the `executeRequest()` call now resolve to named symbols. No behavioural change.
+
+### Observability (#017)
+- **`configs/pagespeed.ts:135-141`** — New opt-in audit block fires immediately after the trusted-input parse: when `PAGESPEED_AUDIT === "1"`, emits `[pagespeed] invoke target=<hostname> preset=<preset> strategy=<strategy>` to stderr. Hostname only — full URL, query string, and any embedded auth are intentionally excluded (preserves the privacy posture that drove the original `[injection-defense]` decision to omit URLs from log lines). Closes the documented correlation gap: SOC operators investigating a `[injection-defense]` event can now `grep '\[pagespeed\] invoke' stderr.log` to find the invocation that triggered it. Off by default — the 2.0.1 minimal-logging policy is unaffected for default deployments.
+- **Documentation: three locations.** (a) `CLAUDE.md` `### Prompt-injection observability` second bullet now describes the env var and its hostname-only line. (b) `configs/pagespeed.ts:8-13` header `// Environment:` block lists `PAGESPEED_AUDIT` alongside `PAGESPEED_API_KEY` and `PAGESPEED_DEBUG`. (c) `README.md:129` Environment Variables table gains the `PAGESPEED_AUDIT` row.
+- **Smoke unaffected** — `scripts/smoke.ts` only checks for `[injection-defense]` and `QUOTA_HINT` substrings; the new line only fires under the env flag (which smoke does not set).
+
+### Documentation (#018)
+- **`README.md:141-144`** — Security section gains a third paragraph: "This fork adds prompt-injection defense (response sanitisation, detection logging, and a trust-boundary helper that re-validates the API-echoed URL against the input) in 3.1.1. See [CLAUDE.md](./CLAUDE.md) `## Security` for the full trust model and [CHANGELOG.md](./CHANGELOG.md) for version history." No duplication of security details — README defers to CLAUDE.md for the trust model and CHANGELOG for version history. Closes the "front-door" gap identified in the review (operators evaluating the fork via README alone now see the prompt-injection defense and have explicit pointers to the canonical docs).
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 489 passed, 7 skipped — unchanged from after the P2 sweep (no test changes).
+- `dist/` rebuilt via `npm run build` (this fork commits `dist/`).
+
+### Net result
+All 6 P1 + 9 P2 + 3 P3 review findings closed across three sweeps. No outstanding gates.

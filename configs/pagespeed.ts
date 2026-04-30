@@ -8,6 +8,9 @@
 // Environment:
 //   PAGESPEED_API_KEY — Optional Google API key (higher rate limits)
 //   PAGESPEED_DEBUG   — When set to "1", stderr includes raw API error bodies
+//   PAGESPEED_AUDIT   — When set to "1", stderr emits one hostname-only
+//                       `[pagespeed] invoke ...` line per invocation for
+//                       correlation with `[injection-defense]` events
 
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
@@ -21,6 +24,8 @@ import {
 import { getMethodAnnotations } from "mcp-curl/schema";
 import {
   CATEGORIES,
+  DEFAULT_TIMEOUT_SECONDS,
+  MAX_RESULT_SIZE_BYTES,
   buildTrustedMeta,
   classifyApiError,
   extractMetrics,
@@ -47,7 +52,7 @@ try {
       baseUrl: schema.api.baseUrl,
       defaultTimeout: schema.defaults?.timeout,
       defaultHeaders: schema.defaults?.headers,
-      maxResultSize: 2_000_000,
+      maxResultSize: MAX_RESULT_SIZE_BYTES,
     })
     .disableCurlExecute(); // replaced by custom tool; jq_query stays enabled
 
@@ -121,6 +126,20 @@ try {
       }
       const trustedInput = parsedInput.toString();
 
+      // Opt-in audit trail (off by default — preserves the 2.0.1 minimal-
+      // logging policy). PAGESPEED_AUDIT=1 emits one hostname-only line per
+      // invocation so operators can correlate `[injection-defense]` events
+      // with the analyze_pagespeed call that triggered them. Hostname only
+      // — full URL, query string, and any embedded auth are intentionally
+      // excluded.
+      if (process.env.PAGESPEED_AUDIT === "1") {
+        const auditPreset = filter_preset ?? "summary";
+        const auditStrategy = (strategy ?? "MOBILE").toUpperCase();
+        console.error(
+          `[pagespeed] invoke target=${parsedInput.hostname} preset=${auditPreset} strategy=${auditStrategy}`,
+        );
+      }
+
       // Build API URL with all 4 categories (YAML schema can't repeat params)
       const apiUrl = new URL(`${schema.api.baseUrl}${endpoint.path}`);
       apiUrl.searchParams.set("url", trustedInput);
@@ -141,7 +160,7 @@ try {
       const result = await utils.executeRequest({
         url: apiUrl.toString(),
         method: "GET",
-        timeout: schema.defaults?.timeout ?? 60,
+        timeout: schema.defaults?.timeout ?? DEFAULT_TIMEOUT_SECONDS,
       });
 
       if (result.isError) {

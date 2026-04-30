@@ -1,6 +1,6 @@
 # PageSpeed Insights MCP Server
 
-An MCP (Model Context Protocol) server that exposes Google PageSpeed Insights analysis to AI assistants like Claude. Built as a fork of [mcp-curl](https://github.com/sixees/mcp-curl).
+An MCP (Model Context Protocol) server that exposes Google PageSpeed Insights analysis to AI assistants like Claude.
 
 ## What It Does
 
@@ -11,7 +11,7 @@ Connects an AI assistant to the [Google PageSpeed Insights API v5](https://devel
 | Tool | Description |
 |---|---|
 | `analyze_pagespeed` | Run Lighthouse analysis on a URL — scores, Core Web Vitals, or both |
-| `jq_query` | Query previously saved JSON response files (inherited from mcp-curl) |
+| `jq_query` | Query previously saved JSON response files |
 
 `curl_execute` is intentionally disabled — all HTTP access is through `analyze_pagespeed`.
 
@@ -77,15 +77,22 @@ npx tsx configs/pagespeed.ts
 - [Getting Started](./getting-started.md) — Connecting Claude Desktop, Claude Code, and other clients
 - [Configuration](./configuration.md) — API key, strategy, and output options
 - [YAML Schema Reference](./api-schema.md) — `pagespeed.yaml` configuration format
-- [Custom Tools](./custom-tools.md) — Extending the server with additional tools (library reference)
-- [Hooks](./hooks.md) — Request/response interception (library reference)
+
+### Internal library reference
+
+For contributors extending the vendored library under `src/lib/`:
+
+- [Custom Tools](./internal/custom-tools.md) — `registerCustomTool()` API
+- [Hooks](./internal/hooks.md) — Request/response interception
 
 ## Architecture
 
 ```text
 configs/
-├── pagespeed.ts    # Entry point — McpCurlServer + custom analyze_pagespeed tool
+├── pagespeed.ts    # Entry point — server + custom analyze_pagespeed tool
 └── pagespeed.yaml  # API config — baseUrl, auth, defaults, input schema generation
+
+src/lib/            # Vendored, internal-only library (security, schema, transport)
 ```
 
 See [CLAUDE.md](../CLAUDE.md) for full architecture notes.

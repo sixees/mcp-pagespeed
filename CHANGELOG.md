@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Decoupled from upstream `mcp-curl`** — removed the `upstream` git remote and reframed documentation
+  (`README.md`, `CLAUDE.md`, `docs/README.md`) so the project is described as a standalone PageSpeed MCP
+  server. The vendored library under `src/lib/` is now tracked solely in this repository with no public
+  API guarantees and is consumed only by `configs/`. Future versions will not pull from `mcp-curl`.
+- **Internal library docs relocated** — `docs/custom-tools.md` and `docs/hooks.md` moved to
+  `docs/internal/` and reframed as internal-only references (the vendored library is not a published
+  package).
+- **`package.json` metadata updated** — `name`, `description`, `repository`, `homepage`, `bugs`,
+  `keywords`, and `bin` now reflect this project rather than the upstream library.
+
+### Removed
+
+- **`docs/upstream-contributions.md`** — fork→upstream contribution audit, no longer relevant.
+- **`configs/README.md`** — generic library template (this repo only ships one config).
+- **`examples/basic`, `examples/with-hooks`, `examples/from-yaml`** — pure library demos, not
+  PageSpeed-relevant.
+- **`docs/todos/*`** — three resolved TODOs (`configure-unknown-fields`, `cache-utilities`,
+  `filter-preset-description`) deleted after verifying their fixes are in place.
+
+### Added
+
+- **`CONTRIBUTING.md`** — brief contributor guide.
+- **`docs/internal/`** — landing area for internal library reference docs.
+- **`src/lib/README.md` Stability section** — documents the vendored, internal-only nature of the library.
+
+### Security
+
+- **`"private": true` in `package.json`** — prevents accidental `npm publish`. Combined with the legacy
+  `prepublishOnly` script and the historical name `mcp-curl`, this is a guardrail against pushing this
+  fork to the wrong namespace on npm.
+
 ## [3.1.1] - 2026-04-30
 
 ### Security

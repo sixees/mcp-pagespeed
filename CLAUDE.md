@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-PageSpeed Insights MCP server — a fork of [mcp-curl](https://github.com/sixees/mcp-curl) that exposes a
-single `analyze_pagespeed` tool for running Google Lighthouse analysis via the PageSpeed Insights API v5.
+PageSpeed Insights MCP server — exposes an `analyze_pagespeed` tool for running Google Lighthouse analysis
+via the PageSpeed Insights API v5, plus a sandboxed `jq_query` helper for inspecting saved responses.
 
 ## Build Commands
 
@@ -19,7 +19,15 @@ npx tsx configs/pagespeed.ts  # Run the PageSpeed MCP server
 
 ## Architecture
 
-Fork-specific code lives in `configs/`:
+The repository has two layers:
+
+- **`configs/`** — PageSpeed-specific entry point and helpers.
+- **`src/lib/`** — Vendored, internal-only library that provides the `McpCurlServer` extension system,
+  security layer, schema generation, and transport. Originally derived from `sixees/mcp-curl`, now tracked
+  here. No public API guarantees — consumed only by `configs/`. See [`docs/internal/`](docs/internal/) for
+  the API reference (`registerCustomTool`, hooks).
+
+Key files in `configs/`:
 
 - `configs/pagespeed.ts` — Entry point. Creates an `McpCurlServer`, disables `curl_execute`, registers a
   custom `analyze_pagespeed` tool with TypeScript post-processing (scores as 0-100 integers, Core Web Vitals
@@ -29,8 +37,8 @@ Fork-specific code lives in `configs/`:
   headers, auth) and input schema generation. The jqFilter/filterPresets exist only to drive
   `generateInputSchema()` — actual response processing is in TypeScript.
 
-The underlying mcp-curl library provides the `McpCurlServer` extension system, security layer, and transport.
-See [upstream docs](https://github.com/sixees/mcp-curl) for the full library API.
+Note: `configs/pagespeed.ts` imports from `"mcp-curl"`. That bare specifier resolves to the local vendored
+library via `package.json#name`; there is no external `mcp-curl` package dependency.
 
 ### Key Design Decisions
 
@@ -44,12 +52,13 @@ See [upstream docs](https://github.com/sixees/mcp-curl) for the full library API
 ## Tools
 
 - **`analyze_pagespeed`** — Lighthouse analysis with `filter_preset` for scores, metrics, or summary output
-- **`jq_query`** — Query saved JSON response files (inherited from mcp-curl)
+- **`jq_query`** — Query saved JSON response files (provided by the vendored library)
 
 ## Security
 
-All mcp-curl security applies: SSRF protection, DNS rebinding prevention, rate limiting, input validation,
-file access controls, resource limits. `curl_execute` is disabled — only `analyze_pagespeed` can make requests.
+The vendored library enforces SSRF protection, DNS rebinding prevention, rate limiting, input validation,
+file access controls, and resource limits. `curl_execute` is disabled — only `analyze_pagespeed` can make
+requests.
 
 ### Prompt-injection observability
 

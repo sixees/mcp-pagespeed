@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PageSpeed Insights MCP Server
-// Fork-specific configuration for Google PageSpeed Insights API v5
+// Configuration for Google PageSpeed Insights API v5
 //
 // Usage:
 //   npx tsx configs/pagespeed.ts
@@ -14,14 +14,17 @@
 
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+// "mcp-pagespeed" is a self-import — resolves to the vendored library
+// (`src/lib/`) via package.json#name + #exports. There is no external
+// `mcp-pagespeed` package dependency.
 import {
   McpCurlServer,
   loadApiSchema,
   generateInputSchema,
   getAuthConfig,
   type ApiSchema,
-} from "mcp-curl";
-import { getMethodAnnotations } from "mcp-curl/schema";
+} from "mcp-pagespeed";
+import { getMethodAnnotations } from "mcp-pagespeed/schema";
 import {
   CATEGORIES,
   DEFAULT_PRESET,

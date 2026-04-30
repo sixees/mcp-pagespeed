@@ -1,10 +1,12 @@
 // src/lib/index.ts
-// Barrel export for library internals - use for advanced customization
+// Barrel export for the vendored, internal-only library.
 //
-// For most use cases, import from the main package entry point instead:
-//   import { McpCurlServer, createApiServer } from "mcp-curl";
+// Imported via the `mcp-pagespeed` self-import (see package.json#name +
+// #exports), e.g.:
+//   import { McpCurlServer, createApiServer } from "mcp-pagespeed";
 //
-// This subpath exports lower-level utilities for advanced use cases.
+// This is not a published package and provides no public API guarantees.
+// See ./README.md `## Stability` for details.
 
 // Extensible server class and utilities
 export { McpCurlServer, createInstanceUtilities } from "./extensible/index.js";

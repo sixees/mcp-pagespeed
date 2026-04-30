@@ -2,6 +2,26 @@
 
 Extracted utility modules organized by domain.
 
+## Stability
+
+> **Internal-only library — no public API guarantees.**
+>
+> This directory is a vendored library, originally derived from `sixees/mcp-curl` and now tracked
+> exclusively in this repository. It is consumed only by the PageSpeed-specific entry point at
+> `configs/pagespeed.ts` (via the `mcp-pagespeed` self-import that resolves through
+> `package.json#name` + `#exports`). The library is not published to npm — `package.json` carries
+> `"private": true`.
+>
+> Implications for contributors:
+> - APIs in this tree may change without notice and without semver bumps. Treat exports as
+>   internal even though the barrel files re-export them.
+> - Don't add new public-API surface or write external-consumer documentation here. The
+>   `docs/internal/` references exist for contributors maintaining `configs/` and `src/lib/`,
+>   not for downstream package consumers.
+> - When fixing bugs or adding capabilities, prefer changes that keep the surface area small.
+>   The smaller this library is, the easier it is to retire or fold into `configs/` if we ever
+>   want to.
+
 ## Dependency Graph
 
 ```text

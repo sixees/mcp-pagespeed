@@ -1,7 +1,8 @@
 {
-  "name": "mcp-curl",
+  "name": "mcp-pagespeed",
   "version": "3.1.1",
-  "description": "MCP server for executing cURL commands",
+  "private": true,
+  "description": "MCP server exposing Google PageSpeed Insights (Lighthouse) analysis to LLM clients",
   "main": "dist/lib.js",
   "types": "dist/lib.d.ts",
   "type": "module",
@@ -24,7 +25,7 @@
     }
   },
   "bin": {
-    "curl-mcp": "./dist/index.js"
+    "pagespeed-mcp": "./dist/index.js"
   },
   "files": [
     "dist",
@@ -32,11 +33,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sixees/mcp-curl.git"
+    "url": "git+https://github.com/sixees/mcp-pagespeed.git"
   },
-  "homepage": "https://github.com/sixees/mcp-curl#readme",
+  "homepage": "https://github.com/sixees/mcp-pagespeed#readme",
   "bugs": {
-    "url": "https://github.com/sixees/mcp-curl/issues"
+    "url": "https://github.com/sixees/mcp-pagespeed/issues"
   },
   "scripts": {
     "build": "tsup && node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
@@ -50,8 +51,11 @@
   },
   "keywords": [
     "mcp",
-    "curl",
-    "http",
+    "pagespeed",
+    "lighthouse",
+    "core-web-vitals",
+    "google-pagespeed-insights",
+    "performance",
     "model-context-protocol",
     "claude"
   ],

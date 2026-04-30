@@ -1,7 +1,7 @@
 # PageSpeed Insights MCP Server
 
-An MCP server that gives LLMs the ability to run Google PageSpeed Insights analysis. Built as a fork of
-[mcp-curl](https://github.com/sixees/mcp-curl) using its extension system.
+An MCP server that gives LLMs the ability to run Google PageSpeed Insights analysis. Exposes a single
+purpose-built `analyze_pagespeed` tool plus a sandboxed `jq_query` helper for inspecting saved responses.
 
 ## Setup
 
@@ -117,8 +117,8 @@ Analysis typically takes 15-45 seconds.
 
 ## Tool: `jq_query`
 
-Query saved PageSpeed response files without making new API calls. Inherited from mcp-curl — useful when
-a large response triggers auto-save to file.
+Query saved PageSpeed response files without making new API calls. Useful when a large response triggers
+auto-save to file.
 
 ## Environment Variables
 
@@ -132,29 +132,28 @@ Without an API key, the PageSpeed API is rate-limited to ~25 queries per 100 sec
 
 ## Security
 
-All security features from mcp-curl apply: SSRF protection, rate limiting, input validation, file access
-controls. See the [mcp-curl security documentation](https://github.com/sixees/mcp-curl#security-highlights)
-for details.
+The server enforces SSRF protection, DNS rebinding prevention, rate limiting, input validation, file access
+controls, and resource limits. The general-purpose `curl_execute` tool is disabled — only the purpose-built
+`analyze_pagespeed` tool can make HTTP requests.
 
-The `curl_execute` tool is disabled — only the purpose-built `analyze_pagespeed` tool can make HTTP requests.
+The server also includes prompt-injection defenses: response sanitisation, detection logging, and a trust-
+boundary helper that re-validates the API-echoed URL against the input. See [CLAUDE.md](./CLAUDE.md)
+`## Security` for the full trust model and [CHANGELOG.md](./CHANGELOG.md) for version history.
 
-This fork adds prompt-injection defense (response sanitisation, detection logging, and a trust-boundary
-helper that re-validates the API-echoed URL against the input) in 3.1.1. See
-[CLAUDE.md](./CLAUDE.md) `## Security` for the full trust model and [CHANGELOG.md](./CHANGELOG.md) for
-version history.
+## Documentation
 
-## Upstream
+- [Getting Started](docs/getting-started.md)
+- [Configuration](docs/configuration.md)
+- [API Schema](docs/api-schema.md)
+- Internal library reference: [`docs/internal/`](docs/internal/) — for contributors extending the vendored
+  request/security infrastructure under `src/lib/`.
 
-This fork is based on [mcp-curl](https://github.com/sixees/mcp-curl). To pull upstream changes:
+## Acknowledgements
 
-```bash
-git remote add upstream https://github.com/sixees/mcp-curl.git
-git fetch upstream
-git merge upstream/main --allow-unrelated-histories
-```
-
-See the [mcp-curl documentation](https://github.com/sixees/mcp-curl) for the full library API, YAML schema
-reference, hooks, custom tools, and configuration options.
+This project began as a fork of [`sixees/mcp-curl`](https://github.com/sixees/mcp-curl) and vendored its
+HTTP, security, and schema-generation code. The two projects have since diverged and this repository is
+independent — `src/lib/` is now an internal-only library tracked here. Thanks to the original mcp-curl
+contributors for the foundation.
 
 ## License
 

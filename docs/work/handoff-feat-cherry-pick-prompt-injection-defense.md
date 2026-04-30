@@ -374,3 +374,32 @@ _None — no follow-ups created from this pass._
 - `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
 - `npm test` 489 passed, 7 skipped — unchanged.
 - All 6 review threads resolved on GitHub via `resolveReviewThread`.
+
+---
+
+## Review Comments Addressed — 2026-04-30 (round 3)
+
+### Changes Made
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| `PAGESPEED_DEBUG=1` branch logs raw `data.error.message` to stderr — could leak URL fragments / headers / PII | @coderabbitai (AI) | Decision conflict (held) | Surfaced to user. The PAGESPEED_DEBUG=1 raw-bodies behaviour is the documented escape hatch (README:128, code comment at `configs/pagespeed.ts:199-203`, handoff line 270). Operators who set the flag are explicitly opting into raw diagnostic content; reducing DEBUG output to structured fields only would change a documented contract and lose the most useful diagnostic. User chose to keep current behaviour. Replied with the documented-decision rationale. |
+| Shutdown handler returns silently on second signal — operators lose escalation path when `server.shutdown()` hangs | @coderabbitai (AI) | Fix needed | Second signal now logs `[pagespeed] received <signal> again, forcing exit` and calls `process.exit(1)` instead of returning. The re-entrancy guard's original intent (don't double-run cleanup) is preserved; the new branch is purely an escape hatch. Comment block updated to explain the escape-hatch semantics and the `process.on()` default-handler removal that motivates it. |
+
+### Decisions Revised
+| Original Decision | New Approach | Reason | Reviewer |
+|-------------------|-------------|--------|----------|
+| Re-entrancy guard returned silently on a second signal (`if (shuttingDown) return`) | Re-entrancy guard logs and force-exits on second signal | `process.on()` removes Node's default SIGINT/SIGTERM handler; without explicit force-exit, a hung `server.shutdown()` swallows operator escalation attempts. The double-cleanup invariant the original guard protected is unchanged — only the silent-ignore branch is replaced. | @coderabbitai |
+
+### Resolved Todos
+_None — no PR-linked todos for #2._
+
+### Outstanding Todos
+_None — no follow-ups created from this pass._
+
+### Files Modified
+- `configs/pagespeed.ts` — second signal now force-exits via `process.exit(1)`; comment block updated to explain the escape-hatch semantics.
+
+### Verification
+- `npm run typecheck` clean (both `tsconfig.json` and `tsconfig.fork.json`).
+- `npm test` 489 passed, 7 skipped — unchanged.
+- Both review threads resolved on GitHub via `resolveReviewThread`.

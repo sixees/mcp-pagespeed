@@ -261,12 +261,20 @@ try {
   // server was never started (early-returns when !this._started), so a
   // pre-start signal cleanly exits without leaking the setInterval that
   // startInjectionCleanup() will create during start().
-  // Re-entrancy guard prevents double-shutdown when an orchestrator sends
-  // SIGTERM twice; try/catch surfaces shutdown failures via exit code 1
-  // instead of an unhandled rejection.
+  // Re-entrancy guard prevents double-shutdown on the cleanup path; a
+  // second signal is treated as a force-exit escape hatch so operators
+  // can escalate when server.shutdown() hangs (process.on() removes the
+  // default SIGINT/SIGTERM behavior, so without this branch repeated
+  // signals would be silently ignored). try/catch surfaces shutdown
+  // failures via exit code 1 instead of an unhandled rejection.
   let shuttingDown = false;
   const shutdown = async (signal: NodeJS.Signals) => {
-    if (shuttingDown) return;
+    if (shuttingDown) {
+      console.error(
+        `[pagespeed] received ${signal} again, forcing exit`,
+      );
+      process.exit(1);
+    }
     shuttingDown = true;
     console.error(`[pagespeed] received ${signal}, shutting down`);
     try {

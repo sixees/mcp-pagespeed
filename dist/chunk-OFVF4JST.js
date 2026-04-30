@@ -2,8 +2,9 @@ import {
   applyDefaultHeaders,
   executeCurlRequest,
   httpOnlyUrl,
-  resolveBaseUrl
-} from "./chunk-ZDY2LZZK.js";
+  resolveBaseUrl,
+  sanitizeDescription
+} from "./chunk-GHEGCO52.js";
 
 // src/lib/schema/validator.ts
 import { z } from "zod";
@@ -186,7 +187,7 @@ function generateInputSchema(endpoint) {
   for (const param of endpoint.parameters ?? []) {
     let schema = createParamSchema(param);
     if (param.description) {
-      schema = schema.describe(param.description);
+      schema = schema.describe(sanitizeDescription(param.description));
     }
     if (!param.required) {
       schema = schema.optional();
@@ -194,7 +195,13 @@ function generateInputSchema(endpoint) {
     shape[param.name] = schema;
   }
   if (endpoint.response?.filterPresets?.length) {
-    const presetNames = endpoint.response.filterPresets.map((p) => p.name);
+    const presetNames = endpoint.response.filterPresets.map((p) => sanitizeDescription(p.name));
+    const uniqueNames = new Set(presetNames);
+    if (uniqueNames.size !== presetNames.length) {
+      throw new Error(
+        `Endpoint "${endpoint.id}" has duplicate filter preset names after sanitization`
+      );
+    }
     shape.filter_preset = buildStringEnum(presetNames).optional().describe("Apply a predefined response filter");
   }
   return z2.object(shape);
@@ -326,11 +333,13 @@ function separateParams(endpoint, params) {
 function resolveJqFilter(endpoint, params) {
   const presetName = params.filter_preset;
   if (presetName && endpoint.response?.filterPresets) {
-    const preset = endpoint.response.filterPresets.find((p) => p.name === presetName);
+    const preset = endpoint.response.filterPresets.find(
+      (p) => sanitizeDescription(p.name) === presetName
+    );
     if (preset) {
       return preset.jqFilter;
     }
-    const available = endpoint.response.filterPresets.map((p) => p.name).join(", ");
+    const available = endpoint.response.filterPresets.map((p) => sanitizeDescription(p.name)).join(", ");
     throw new Error(
       `Unknown filter preset "${presetName}". Available presets: ${available}`
     );
@@ -420,18 +429,16 @@ function getMethodAnnotations(method) {
   };
 }
 function buildToolDescription(endpoint) {
-  const parts = [endpoint.description];
-  const CONTROL_CHARS = /[\x00-\x1F\x7F-\x9F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]+/g;
+  const parts = [sanitizeDescription(endpoint.description)];
   if (endpoint.response?.filterPresets?.length) {
     parts.push("");
     parts.push("Available filter presets:");
     for (const preset of endpoint.response.filterPresets) {
+      const presetName = sanitizeDescription(preset.name);
       if (preset.description) {
-        const desc = preset.description.replace(CONTROL_CHARS, " ");
-        parts.push(`  - ${preset.name}: ${desc}`);
+        parts.push(`  - ${presetName}: ${sanitizeDescription(preset.description)}`);
       } else {
-        const safeFilter = preset.jqFilter.replace(CONTROL_CHARS, " ");
-        parts.push(`  - ${preset.name}: applies filter "${safeFilter}"`);
+        parts.push(`  - ${presetName}: applies filter "${sanitizeDescription(preset.jqFilter)}"`);
       }
     }
   }
@@ -444,7 +451,7 @@ function registerEndpointTools(server, schema, config) {
     server.registerTool(
       endpoint.id,
       {
-        title: endpoint.title,
+        title: sanitizeDescription(endpoint.title),
         description: buildToolDescription(endpoint),
         inputSchema,
         annotations: getMethodAnnotations(endpoint.method)
@@ -456,7 +463,7 @@ function registerEndpointTools(server, schema, config) {
 function generateToolDefinitions(schema, config) {
   return schema.endpoints.map((endpoint) => ({
     id: endpoint.id,
-    title: endpoint.title,
+    title: sanitizeDescription(endpoint.title),
     description: buildToolDescription(endpoint),
     method: endpoint.method,
     inputSchema: generateInputSchema(endpoint),

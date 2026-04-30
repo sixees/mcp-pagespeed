@@ -3,28 +3,36 @@ import {
   ENV,
   JqQuerySchema,
   LIMITS,
+  MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH,
   SERVER,
   SESSION,
   applyDefaultHeaders,
   applyJqFilter,
+  applySpotlighting,
   cleanupOrphanedTempDirs,
   cleanupTempDir,
   createSafeFilenameBase,
+  detectInjectionPattern,
   executeCurlRequest,
   getErrorMessage,
   getOrCreateTempDir,
   httpOnlyUrl,
   isValidSessionId,
+  logInjectionDetected,
   parsePort,
   registerCurlExecuteTool,
   resolveBaseUrl,
   resolveOutputDir,
   safeStringCompare,
+  sanitizeDescription,
+  sanitizeResponse,
+  startInjectionCleanup,
   startRateLimitCleanup,
+  stopInjectionCleanup,
   stopRateLimitCleanup,
   validateFilePath,
   validateOutputDir
-} from "./chunk-ZDY2LZZK.js";
+} from "./chunk-GHEGCO52.js";
 
 // src/lib/server/lifecycle.ts
 var httpServer = null;
@@ -147,8 +155,13 @@ async function executeJqQuery(params, _extra) {
     const validatedOutputDir = resolvedOutputDir ? await validateOutputDir(resolvedOutputDir) : void 0;
     const content = await readFile(validatedFilePath, { encoding: "utf-8" });
     const filtered = applyJqFilter(content, params.jq_filter);
+    const sanitized = sanitizeResponse(filtered);
+    const phrase = detectInjectionPattern(sanitized);
+    if (phrase !== null) {
+      logInjectionDetected(basename(validatedFilePath));
+    }
     const maxSize = params.max_result_size ?? LIMITS.DEFAULT_MAX_RESULT_SIZE;
-    const contentBytes = Buffer.byteLength(filtered, "utf8");
+    const contentBytes = Buffer.byteLength(sanitized, "utf8");
     const shouldSave = params.save_to_file || contentBytes > maxSize;
     if (shouldSave) {
       const sourceBasename = basename(validatedFilePath) || "query_result";
@@ -156,7 +169,7 @@ async function executeJqQuery(params, _extra) {
       const filename = `${safeName}_${Date.now()}.txt`;
       const targetDir = validatedOutputDir ?? await getOrCreateTempDir();
       const filepath = join(targetDir, filename);
-      await writeFile(filepath, filtered, { encoding: "utf-8", mode: 384 });
+      await writeFile(filepath, sanitized, { encoding: "utf-8", mode: 384 });
       return {
         content: [
           {
@@ -170,14 +183,14 @@ async function executeJqQuery(params, _extra) {
       content: [
         {
           type: "text",
-          text: filtered
+          text: sanitized
         }
       ]
     };
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     const errorClass = error instanceof Error ? error.constructor.name : "Error";
-    console.error(`jq_query error: [${basename(params.filepath)}] ${errorClass}`);
+    console.error(`jq_query error: [${sanitizeDescription(basename(params.filepath))}] ${errorClass}`);
     return {
       content: [
         {
@@ -393,7 +406,7 @@ function registerApiTestPrompt(server) {
 
 URL: ${url}
 Method: ${method}
-${description ? `Description: ${description}` : ""}
+${description ? `Description: ${sanitizeDescription(description)}` : ""}
 
 Please:
 1. Make the request using curl_execute
@@ -427,7 +440,7 @@ function registerApiDiscoveryPrompt(server) {
           type: "text",
           text: `Explore the REST API at: ${base_url}
 
-${auth_token ? `Use bearer token for authentication: ${auth_token}` : "No authentication token provided."}
+${auth_token ? `Use bearer token for authentication: ${sanitizeDescription(auth_token)}` : "No authentication token provided."}
 
 Please:
 1. Try common discovery endpoints (/api, /api/v1, /health, /swagger.json, /openapi.json)
@@ -506,7 +519,7 @@ function createInstanceUtilities(config) {
 // src/lib/transports/http.ts
 import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID } from "crypto";
+import { randomUUID as randomUUID2 } from "crypto";
 
 // src/lib/session/session-manager.ts
 var SessionManager = class {
@@ -635,6 +648,9 @@ function registerAllCapabilities(server) {
 // src/lib/extensible/mcp-curl-server.ts
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+// src/lib/extensible/tool-wrapper.ts
+import { randomUUID } from "crypto";
+
 // src/lib/extensible/hook-executor.ts
 async function executeWithHooks(tool, params, config, hooks, sessionId, executor) {
   const ctx = {
@@ -686,6 +702,15 @@ async function executeWithHooks(tool, params, config, hooks, sessionId, executor
 }
 
 // src/lib/extensible/tool-wrapper.ts
+function maybeApplySpotlighting(result, config) {
+  if (!config.enableSpotlighting || result.isError) {
+    return result;
+  }
+  return {
+    ...result,
+    content: [{ type: "text", text: applySpotlighting(result.content[0].text, randomUUID()) }]
+  };
+}
 function applySharedConfigDefaults(params, config) {
   if (config.outputDir && !params.output_dir) {
     params.output_dir = config.outputDir;
@@ -716,29 +741,31 @@ function applyConfigTransformsJq(params, config) {
 }
 function registerCurlToolWithHooks(server, options) {
   const { executor, enabled, config, hooks } = options;
-  const handler = (params, extra) => {
+  const handler = async (params, extra) => {
     if (!enabled) {
-      return Promise.resolve({
+      return {
         content: [{ type: "text", text: "Error: curl_execute tool is disabled" }],
         isError: true
-      });
+      };
     }
     const transformedParams = applyConfigTransformsCurl(params, config);
-    return executeWithHooks("curl_execute", transformedParams, config, hooks, extra.sessionId, executor);
+    const result = await executeWithHooks("curl_execute", transformedParams, config, hooks, extra.sessionId, executor);
+    return maybeApplySpotlighting(result, config);
   };
   server.registerTool("curl_execute", CURL_EXECUTE_TOOL_META, handler);
 }
 function registerJqToolWithHooks(server, options) {
   const { executor, enabled, config, hooks } = options;
-  const handler = (params, extra) => {
+  const handler = async (params, extra) => {
     if (!enabled) {
-      return Promise.resolve({
+      return {
         content: [{ type: "text", text: "Error: jq_query tool is disabled" }],
         isError: true
-      });
+      };
     }
     const transformedParams = applyConfigTransformsJq(params, config);
-    return executeWithHooks("jq_query", transformedParams, config, hooks, extra.sessionId, executor);
+    const result = await executeWithHooks("jq_query", transformedParams, config, hooks, extra.sessionId, executor);
+    return maybeApplySpotlighting(result, config);
   };
   server.registerTool("jq_query", JQ_QUERY_TOOL_META, handler);
 }
@@ -756,7 +783,8 @@ var KNOWN_CONFIG_KEYS_ARRAY = [
   "authToken",
   "allowedOrigins",
   "defaultUserAgent",
-  "defaultReferer"
+  "defaultReferer",
+  "enableSpotlighting"
 ];
 var KNOWN_CONFIG_KEYS = new Set(KNOWN_CONFIG_KEYS_ARRAY);
 var McpCurlServer = class {
@@ -777,6 +805,7 @@ var McpCurlServer = class {
   _httpServer = null;
   _sessionManager = null;
   _rateLimitInterval = null;
+  _injectionCleanupInterval = null;
   _utilities = null;
   /**
    * Configure server options.
@@ -878,7 +907,10 @@ var McpCurlServer = class {
    * implement it within the handler function itself.
    *
    * @param name - Tool name (must match /^[a-z][a-z0-9_]*$/)
-   * @param meta - Tool metadata (title, description, inputSchema)
+   * @param meta - Tool metadata (title, description, inputSchema). title and description
+   *   are sanitized automatically. inputSchema field descriptions (.describe() strings)
+   *   are NOT sanitized — callers must sanitize any field descriptions sourced from
+   *   external input using sanitizeDescription() before registering.
    * @param handler - Tool handler function
    * @returns this for chaining
    * @throws Error if called after start()
@@ -916,7 +948,20 @@ var McpCurlServer = class {
     if (this._customTools.some((t) => t.name === name)) {
       throw new Error(`Custom tool "${name}" is already registered`);
     }
-    this._customTools.push({ name, meta, handler });
+    const sanitizedTitle = sanitizeDescription(meta.title);
+    const sanitizedDesc = sanitizeDescription(meta.description);
+    const truncatedDesc = sanitizedDesc.slice(0, MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH);
+    const sanitizedMeta = {
+      ...meta,
+      title: sanitizedTitle,
+      description: truncatedDesc
+    };
+    if (sanitizedDesc.length > MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH) {
+      console.warn(
+        `McpCurlServer.registerCustomTool("${name}"): description truncated to ${MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH} chars`
+      );
+    }
+    this._customTools.push({ name, meta: sanitizedMeta, handler });
     return this;
   }
   /**
@@ -977,6 +1022,7 @@ var McpCurlServer = class {
     try {
       await cleanupOrphanedTempDirs();
       this._rateLimitInterval = startRateLimitCleanup();
+      this._injectionCleanupInterval = startInjectionCleanup();
       this._server = this.createConfiguredServer();
       if (transport === "http") {
         await this.startHttp();
@@ -1005,6 +1051,10 @@ var McpCurlServer = class {
       if (this._rateLimitInterval) {
         stopRateLimitCleanup(this._rateLimitInterval);
         this._rateLimitInterval = null;
+      }
+      if (this._injectionCleanupInterval) {
+        stopInjectionCleanup(this._injectionCleanupInterval);
+        this._injectionCleanupInterval = null;
       }
       this._server = null;
       this._started = false;
@@ -1070,6 +1120,9 @@ var McpCurlServer = class {
     if (this._rateLimitInterval) {
       stopRateLimitCleanup(this._rateLimitInterval);
     }
+    if (this._injectionCleanupInterval) {
+      stopInjectionCleanup(this._injectionCleanupInterval);
+    }
     try {
       await cleanupTempDir();
     } catch (error) {
@@ -1079,6 +1132,7 @@ var McpCurlServer = class {
       this._frozenConfig = null;
       this._utilities = null;
       this._rateLimitInterval = null;
+      this._injectionCleanupInterval = null;
       this._sessionManager = null;
     }
   }
@@ -1280,7 +1334,7 @@ function createHttpApp(options) {
       }
       const server = createMcpServer();
       const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
+        sessionIdGenerator: () => randomUUID2(),
         enableJsonResponse: true
       });
       transport.onclose = () => {

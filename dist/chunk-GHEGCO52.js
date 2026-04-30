@@ -535,6 +535,68 @@ function createConfigError(configName, value, reason) {
   return new Error(`Invalid ${configName} value "${value}": ${reason}.`);
 }
 
+// src/lib/utils/sanitize.ts
+var MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH = 1e3;
+var DESC_CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFE00-\uFE0F\u{E0000}-\u{E007F}]+/gu;
+var RESPONSE_SANITIZE_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFE00-\uFE0F\u{E0000}-\u{E007F}]+| {50,}/gu;
+var INJECTION_PATTERNS = new RegExp(
+  [
+    // Explicit instruction override
+    "ignore[\\s\\S]{0,20}(previous|prior|all|your|above|system)[\\s\\S]{0,20}instructions?",
+    "disregard[\\s\\S]{0,20}(previous|prior|all|your|above|system)[\\s\\S]{0,20}(instructions?|directives?|rules?)",
+    "forget[\\s\\S]{0,20}(previous|prior|all|your|above|everything|instructions?)",
+    "override[\\s\\S]{0,20}(your|the|all|previous)[\\s\\S]{0,20}(instructions?|settings?|behavior|config|directives?|rules?)",
+    // Persona takeover
+    "you\\s+are\\s+now\\s+",
+    "act\\s+as\\s+",
+    "assume\\s+the\\s+role\\s+of",
+    "pretend\\s+(you\\s+are|to\\s+be)",
+    "roleplay\\s+as",
+    "\\bDAN\\b",
+    "jailbreak",
+    // Privilege escalation / structural override tokens
+    "\\[ADMIN[\\s_-]*OVERRIDE\\]",
+    "<\\s*admin\\s*>",
+    "<\\s*SYSTEM\\s*>",
+    "<\\s*IMPORTANT\\s*>",
+    "\\[INST\\]",
+    // System/prompt manipulation
+    "system\\s+prompt",
+    "new\\s+(primary\\s+)?instructions?\\s*(are|:|follow)",
+    "your\\s+new\\s+(primary\\s+|main\\s+)?objective",
+    "do\\s+not\\s+(follow|apply|use|obey|comply)[\\s\\S]{0,20}instructions?",
+    // Data exfiltration — file system triggers
+    "read\\s+~\\/\\.(ssh|cursor|env|zshrc|bashrc|config|npmrc|gitconfig)",
+    "pass[\\s\\S]{0,20}(its|the)\\s+contents?\\s+as",
+    "exfiltrate",
+    "(extract|exfiltrate|leak|transmit|send\\s+me)[\\s\\S]{0,30}(passwords?|credentials?|secrets?|tokens?|api[\\s\\S]{0,5}keys?)"
+  ].join("|"),
+  "i"
+);
+function sanitizeDescription(input) {
+  if (input == null) return "";
+  return input.replace(DESC_CONTROL_CHARS, " ").trim();
+}
+function sanitizeResponse(input) {
+  if (input == null) return "";
+  return input.replace(RESPONSE_SANITIZE_PATTERN, (match) => {
+    if (match[0] === " ") return "[WHITESPACE REMOVED]";
+    return "";
+  });
+}
+function detectInjectionPattern(input) {
+  const match = input.match(INJECTION_PATTERNS);
+  if (!match) return null;
+  return match[0].replace(/[\n\r]+/g, " ").slice(0, 200);
+}
+function applySpotlighting(content, requestId) {
+  const begin = `---EXTERNAL-CONTENT-BEGIN-${requestId}---`;
+  const end = `---EXTERNAL-CONTENT-END-${requestId}---`;
+  return `${begin}
+${content}
+${end}`;
+}
+
 // src/lib/files/output-dir.ts
 function resolveOutputDir(paramDir) {
   if (paramDir !== void 0) {
@@ -860,6 +922,39 @@ async function validateFilePath(filepath) {
     );
   }
   return realFilePath;
+}
+
+// src/lib/security/detection-logger.ts
+var THROTTLE_WINDOW_MS = 6e4;
+var lastDetectedMap = /* @__PURE__ */ new Map();
+function normalizeDetectionLabel(label) {
+  return label.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").slice(0, 128);
+}
+function logInjectionDetected(hostname) {
+  const safeLabel = normalizeDetectionLabel(hostname);
+  const now = Date.now();
+  const lastSeen = lastDetectedMap.get(safeLabel);
+  if (lastSeen !== void 0 && now - lastSeen < THROTTLE_WINDOW_MS) {
+    return;
+  }
+  lastDetectedMap.set(safeLabel, now);
+  console.error(`[injection-defense] [${safeLabel}] InjectionDetected`);
+}
+function startInjectionCleanup() {
+  const interval = setInterval(cleanupInjectionDetectionMap, THROTTLE_WINDOW_MS);
+  interval.unref();
+  return interval;
+}
+function stopInjectionCleanup(interval) {
+  clearInterval(interval);
+}
+function cleanupInjectionDetectionMap() {
+  const now = Date.now();
+  for (const [key, timestamp] of lastDetectedMap) {
+    if (now - timestamp >= THROTTLE_WINDOW_MS) {
+      lastDetectedMap.delete(key);
+    }
+  }
 }
 
 // src/lib/execution/command-executor.ts
@@ -1533,6 +1628,19 @@ Preview: ${preview}${jsonString.length > LIMITS.ERROR_PREVIEW_LENGTH ? "..." : "
 }
 
 // src/lib/response/processor.ts
+var HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
+function sanitizeAndDetect(text, hostname) {
+  const sanitized = sanitizeResponse(text);
+  if (detectInjectionPattern(sanitized) !== null) {
+    logInjectionDetected(hostname);
+  }
+  return sanitized;
+}
+function isBinaryContentType(contentType) {
+  if (!contentType) return false;
+  const mime = contentType.split(";")[0].trim().toLowerCase();
+  return mime.startsWith("image/") || mime.startsWith("audio/") || mime.startsWith("video/") || mime.startsWith("font/") || mime.startsWith("multipart/") || mime === "application/octet-stream" || mime === "application/pdf" || mime === "application/wasm" || mime === "application/zip" || mime === "application/gzip" || mime === "application/x-gzip" || mime === "application/x-tar";
+}
 async function processResponse(response, options) {
   const rawBytes = Buffer.byteLength(response, "utf8");
   if (rawBytes > LIMITS.MAX_RESPONSE_SIZE) {
@@ -1541,6 +1649,18 @@ async function processResponse(response, options) {
     );
   }
   let content = response;
+  let hostname = "unknown";
+  try {
+    hostname = new URL(options.url).hostname;
+  } catch {
+  }
+  if (!isBinaryContentType(options.contentType)) {
+    const normalizedMime = options.contentType?.split(";")[0].trim().toLowerCase() ?? "";
+    if (normalizedMime === "text/html") {
+      content = content.replace(HTML_COMMENT_PATTERN, "");
+    }
+    content = sanitizeAndDetect(content, hostname);
+  }
   if (options.jqFilter) {
     const isJson = isJsonContentType(options.contentType);
     const trimmed = content.trim();
@@ -1564,6 +1684,9 @@ async function processResponse(response, options) {
       throw error;
     }
     content = applyJqFilterToParsed(parsedData, options.jqFilter);
+    if (!isBinaryContentType(options.contentType)) {
+      content = sanitizeAndDetect(content, hostname);
+    }
   }
   const maxSize = options.maxResultSize ?? LIMITS.DEFAULT_MAX_RESULT_SIZE;
   const contentBytes = Buffer.byteLength(content, "utf8");
@@ -1758,6 +1881,11 @@ export {
   getErrorMessage,
   resolveBaseUrl,
   httpOnlyUrl,
+  MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH,
+  sanitizeDescription,
+  sanitizeResponse,
+  detectInjectionPattern,
+  applySpotlighting,
   SESSION,
   startRateLimitCleanup,
   stopRateLimitCleanup,
@@ -1771,6 +1899,9 @@ export {
   cleanupOrphanedTempDirs,
   cleanupTempDir,
   validateFilePath,
+  logInjectionDetected,
+  startInjectionCleanup,
+  stopInjectionCleanup,
   resolveOutputDir,
   validateOutputDir,
   CurlExecuteSchema,

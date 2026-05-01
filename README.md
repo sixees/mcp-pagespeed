@@ -94,7 +94,8 @@ Analysis typically takes 15-45 seconds.
 }
 ```
 
-**metrics** — Core Web Vitals as value/display pairs:
+**metrics** — Core Web Vitals as value/display pairs (`value` is the raw `numericValue` from Lighthouse, or
+`null` if Lighthouse omitted the audit; `display` is Lighthouse's pre-formatted string or `"N/A"`):
 
 ```json
 {
@@ -106,7 +107,9 @@ Analysis typically takes 15-45 seconds.
 }
 ```
 
-**summary** (default) — Both scores and metrics, plus `analyzed_url` and `strategy`.
+**summary** (default) — Both scores and metrics, plus `analyzed_url` and `strategy`. If the trust-boundary
+helper had to substitute `analyzed_url` because the API echoed a different value, a `warnings` array is
+appended (the warnings array is added to every preset shape when present).
 
 ### Example
 
@@ -118,10 +121,21 @@ Analysis typically takes 15-45 seconds.
 }
 ```
 
+### Trust boundary
+
+`analyze_pagespeed` re-validates the URL Google echoes back (`data.id`) against the URL you submitted on
+origin, pathname, and canonicalised search string. On mismatch the tool returns the input URL and appends
+a `warnings` entry (`"analyzed_url substituted with the URL you submitted; the API echoed a different
+value (echo content withheld)."`) instead of forwarding the API echo. Response bodies are also sanitised
+for known prompt-injection patterns before reaching the LLM. See [CLAUDE.md](./CLAUDE.md) `## Security` for
+the full trust model.
+
 ## Tool: `jq_query`
 
-Query saved PageSpeed response files without making new API calls. Useful when a large response triggers
-auto-save to file.
+Query saved PageSpeed response files without making new API calls. Provided by the vendored library at
+`src/lib/`; sandboxed to the OS temp directory, the library's output directory, and the current working
+directory. Useful when a large response triggers auto-save to file (the `analyze_pagespeed` handler raises
+the inline cap to 2 MB so this is rare in practice).
 
 ## Environment Variables
 
@@ -136,8 +150,9 @@ Without an API key, the PageSpeed API is rate-limited to ~25 queries per 100 sec
 ## Security
 
 The server enforces SSRF protection, DNS rebinding prevention, rate limiting, input validation, file access
-controls, and resource limits. The general-purpose `curl_execute` tool is disabled — only the purpose-built
-`analyze_pagespeed` tool can make HTTP requests.
+controls, and resource limits. The general-purpose `curl_execute` tool is disabled — it still appears in
+`tools/list` (an MCP convention from the vendored library) but returns an error at call time, so only the
+purpose-built `analyze_pagespeed` tool can make HTTP requests.
 
 The server also includes prompt-injection defenses: response sanitisation, detection logging, and a trust-
 boundary helper that re-validates the API-echoed URL against the input. See [CLAUDE.md](./CLAUDE.md)

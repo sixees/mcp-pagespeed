@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PageSpeed Insights MCP Server
-// Fork-specific configuration for Google PageSpeed Insights API v5
+// Configuration for Google PageSpeed Insights API v5
 //
 // Usage:
 //   npx tsx configs/pagespeed.ts
@@ -14,25 +14,30 @@
 
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+// "mcp-pagespeed" is a self-import — resolves to the vendored library
+// (`src/lib/`) via package.json#name + #exports. There is no external
+// `mcp-pagespeed` package dependency.
 import {
-  McpCurlServer,
+  PageSpeedServer,
   loadApiSchema,
   generateInputSchema,
   getAuthConfig,
   type ApiSchema,
-} from "mcp-curl";
-import { getMethodAnnotations } from "mcp-curl/schema";
+} from "mcp-pagespeed";
+import { getMethodAnnotations } from "mcp-pagespeed/schema";
 import {
   CATEGORIES,
   DEFAULT_PRESET,
   DEFAULT_TIMEOUT_SECONDS,
   MAX_RESULT_SIZE_BYTES,
+  PageSpeedResponseSchema,
   buildTrustedMeta,
   classifyApiError,
   extractMetrics,
   extractScores,
   pickPreset,
   type FilterPreset,
+  type PageSpeedResponse,
 } from "./pagespeed-helpers.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,7 +54,7 @@ try {
   const inputSchema = generateInputSchema(endpoint);
 
   // Create and configure server from schema
-  const server = new McpCurlServer()
+  const server = new PageSpeedServer()
     .configure({
       baseUrl: schema.api.baseUrl,
       defaultTimeout: schema.defaults?.timeout,
@@ -99,6 +104,12 @@ try {
         filter_preset?: FilterPreset;
       };
 
+      // Hoisted once: defaults applied for both the audit log and the
+      // downstream API/output paths so the audit can never report a
+      // different preset/strategy than the one actually executed.
+      const preset = filter_preset ?? DEFAULT_PRESET;
+      const normalisedStrategy = (strategy ?? "MOBILE").toUpperCase();
+
       // Parse the input URL exactly once. The parsed object is passed
       // through to API URL construction; the canonical .toString() is
       // used as the trust-boundary input for buildTrustedMeta. Three
@@ -139,17 +150,15 @@ try {
       // — full URL, query string, and any embedded auth are intentionally
       // excluded.
       if (process.env.PAGESPEED_AUDIT === "1") {
-        const auditPreset = filter_preset ?? DEFAULT_PRESET;
-        const auditStrategy = (strategy ?? "MOBILE").toUpperCase();
         console.error(
-          `[pagespeed] invoke target=${parsedInput.hostname} preset=${auditPreset} strategy=${auditStrategy}`,
+          `[pagespeed] invoke target=${parsedInput.hostname} preset=${preset} strategy=${normalisedStrategy}`,
         );
       }
 
       // Build API URL with all 4 categories (YAML schema can't repeat params)
       const apiUrl = new URL(`${schema.api.baseUrl}${endpoint.path}`);
       apiUrl.searchParams.set("url", trustedInput);
-      apiUrl.searchParams.set("strategy", (strategy ?? "MOBILE").toUpperCase());
+      apiUrl.searchParams.set("strategy", normalisedStrategy);
       for (const cat of CATEGORIES) {
         apiUrl.searchParams.append("category", cat);
       }
@@ -180,14 +189,34 @@ try {
         .map((c) => c.text)
         .join("\n");
 
-      // Parse JSON response. Fail closed: a non-JSON body (truncation,
-      // auto-save-to-file path, malformed proxy response) means
-      // trustedAnalyzedUrl() can't run, and the fork's trust model says
-      // unvalidated content must not reach the LLM. Generic message keeps
-      // 2.0.1's minimal-logging policy.
-      let data: Record<string, any>;
+      // Parse JSON response and validate at the trust boundary with Zod.
+      // Fail closed on either failure: a non-JSON body (truncation, auto-
+      // save-to-file path, malformed proxy response) or an unexpected shape
+      // (missing object root, etc.) means trustedAnalyzedUrl() can't run,
+      // and the fork's trust model says unvalidated content must not reach
+      // the LLM. Generic messages keep 2.0.1's minimal-logging policy.
+      // .passthrough() in PageSpeedResponseSchema tolerates Google's
+      // additive version drift — only the fields we actually read are
+      // typed; everything else flows through.
+      let data: PageSpeedResponse;
       try {
-        data = JSON.parse(resultText);
+        const parsed: unknown = JSON.parse(resultText);
+        const result = PageSpeedResponseSchema.safeParse(parsed);
+        if (!result.success) {
+          console.error(
+            "pagespeed: response shape mismatch; rejecting (trust validation cannot run)",
+          );
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "Error: PageSpeed API returned an unexpected response shape.",
+              },
+            ],
+            isError: true,
+          };
+        }
+        data = result.data;
       } catch {
         console.error(
           "pagespeed: non-JSON response; rejecting (trust validation cannot run)",
@@ -207,21 +236,20 @@ try {
       // forwarding Google's raw error.message to the LLM — that string can
       // include URL fragments, headers, or PII (regression of 2.0.1 minimal-
       // logging policy). Class string only; raw message available on stderr
-      // behind PAGESPEED_DEBUG=1 for operator debugging.
-      if (data.error && typeof data.error === "object") {
-        const code = Number(data.error.code) || 0;
-        const status =
-          typeof data.error.status === "string" ? data.error.status : undefined;
-        const errors = Array.isArray(data.error.errors)
-          ? (data.error.errors as Array<{ reason?: string }>)
-          : undefined;
-        const userMessage = classifyApiError(code, status, errors);
+      // behind PAGESPEED_DEBUG=1 for operator debugging. Zod gives us typed
+      // optional fields directly, so the previous `typeof`/`Array.isArray`
+      // narrowing falls away.
+      if (data.error) {
+        const code = data.error.code ?? 0;
+        const userMessage = classifyApiError(
+          code,
+          data.error.status,
+          data.error.errors,
+        );
         if (process.env.PAGESPEED_DEBUG === "1") {
-          const rawMessage =
-            typeof data.error.message === "string"
-              ? data.error.message
-              : "(no message)";
-          console.error(`pagespeed: API error ${code}: ${rawMessage}`);
+          console.error(
+            `pagespeed: API error ${code}: ${data.error.message ?? "(no message)"}`,
+          );
         } else {
           console.error(`pagespeed: API error ${code}`);
         }
@@ -233,8 +261,12 @@ try {
         };
       }
 
-      const lighthouse = data.lighthouseResult;
-      if (!lighthouse) {
+      // lighthouseResult is `unknown` in the schema — the extractors
+      // (`extractScores`, `extractMetrics`) walk it leniently with `?.`/`??`,
+      // so a tighter schema for the Lighthouse subtree would just duplicate
+      // that leniency. Cast at the boundary; the extractors handle missing
+      // fields.
+      if (!data.lighthouseResult || typeof data.lighthouseResult !== "object") {
         console.error("pagespeed: no lighthouseResult in API response");
         return {
           content: [
@@ -246,8 +278,8 @@ try {
           isError: true,
         };
       }
+      const lighthouse = data.lighthouseResult as Record<string, any>;
 
-      const preset = filter_preset ?? DEFAULT_PRESET;
       const warnings: string[] = [];
       const scores = extractScores(lighthouse);
       const metrics = extractMetrics(lighthouse);

@@ -1,71 +1,26 @@
 // src/lib.ts
-// Library entry point for programmatic usage of mcp-curl
+// Main entry point for the vendored, internal-only library backing
+// `mcp-pagespeed`. Resolved by Node when consumers do
+//   import { ... } from "mcp-pagespeed";
+// via package.json#name + #exports.
 //
-// This module exports the extensible McpCurlServer class and all public types
-// for building custom MCP servers with cURL capabilities.
+// This is not a published package and provides no public API guarantees.
+// See ./lib/README.md `## Stability` for details.
+//
+// Surface area is intentionally minimal — re-exports only what the in-tree
+// consumer (`configs/pagespeed.ts`) actually imports. Adding a new tool to
+// `configs/` may require adding a re-export here. That's the deliberate
+// trade-off: a smaller surface keeps cold-start light and signals that the
+// library is internal, not a published API.
 
-// Main server class
-export { McpCurlServer } from "./lib/extensible/index.js";
+// Server class. `PageSpeedServer` is the preferred name; `McpCurlServer`
+// is retained for the in-tree library internals which still use the original
+// class name (see src/lib/extensible/mcp-curl-server.ts).
+export { McpCurlServer, McpCurlServer as PageSpeedServer } from "./lib/extensible/index.js";
 export type { CustomToolMeta } from "./lib/extensible/index.js";
 
-// Instance utilities for direct tool execution
-export { createInstanceUtilities } from "./lib/extensible/index.js";
-export type { InstanceUtilities, ExecuteRequestParams } from "./lib/extensible/index.js";
-
-// API server factory (creates servers from YAML schema definitions)
-export { createApiServer, createApiServerSync } from "./lib/api-server.js";
-export type { CreateApiServerOptions } from "./lib/api-server.js";
-
-// Schema types and utilities
-export type {
-    // Schema types
-    ApiSchemaVersion,
-    AuthConfig,
-    ParameterLocation,
-    ParameterType,
-    EndpointParameter,
-    ResponseConfig,
-    HttpMethod,
-    EndpointDefinition,
-    ApiInfo,
-    ApiDefaults,
-    ApiSchema,
-    // Generator config
-    GeneratorConfig,
-} from "./lib/schema/index.js";
-
-export {
-    // Validation
-    ApiSchemaValidator,
-    ApiSchemaValidationError,
-    validateApiSchema,
-    // Loading
-    ApiSchemaLoadError,
-    loadApiSchema,
-    loadApiSchemaFromString,
-    // Generation
-    AuthenticationError,
-    generateInputSchema,
-    buildUrl,
-    getAuthConfig,
-    registerEndpointTools,
-    generateToolDefinitions,
-} from "./lib/schema/index.js";
-
-// Public API types
-export type {
-    // Configuration
-    McpCurlConfig,
-    TransportMode,
-
-    // Hook types
-    HookContext,
-    BeforeRequestResult,
-    BeforeRequestHook,
-    AfterResponseHook,
-    OnErrorHook,
-
-    // Input types (for typing hook parameters)
-    CurlExecuteInput,
-    JqQueryInput,
-} from "./lib/types/public.js";
+// Schema loading + input-schema generation + auth + the ApiSchema type are
+// the only schema-module symbols `configs/pagespeed.ts` reaches for via the
+// `.` entry. `getMethodAnnotations` lives on the `./schema` subpath.
+export { loadApiSchema, generateInputSchema, getAuthConfig } from "./lib/schema/index.js";
+export type { ApiSchema } from "./lib/schema/index.js";

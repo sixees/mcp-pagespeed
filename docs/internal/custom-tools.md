@@ -1,6 +1,6 @@
 # Custom Tools Guide
 
-> **Library reference** — This guide documents the `registerCustomTool()` API from the underlying [mcp-curl](https://github.com/sixees/mcp-curl) library. The PageSpeed server uses this API to register `analyze_pagespeed`. Refer here when extending the server with additional tools.
+> **Internal library reference** — This guide documents the `registerCustomTool()` API exposed by the vendored library under [`src/lib/`](../../src/lib/). The PageSpeed server uses this API in `configs/pagespeed.ts` to register `analyze_pagespeed`. Refer here when extending the server with additional tools. The library is internal and provides no public API guarantees.
 
 This guide explains how to create custom MCP tools using `registerCustomTool()`.
 
@@ -58,9 +58,11 @@ type ToolCallback = (params: T) => Promise<{
 ## Basic Example
 
 ```typescript
-import {McpCurlServer} from "mcp-curl";
+import {McpCurlServer} from "mcp-pagespeed";
 import {z} from "zod";
 
+// Note: "mcp-pagespeed" is a self-import — it resolves to the vendored library at
+// `src/lib/` via package.json#name + #exports. There is no external dependency.
 const server = new McpCurlServer();
 
 server.registerCustomTool(
@@ -231,7 +233,7 @@ annotations: {
 ## Complete Example: Weather API Tool
 
 ```typescript
-import {McpCurlServer} from "mcp-curl";
+import {McpCurlServer} from "mcp-pagespeed";
 import {z} from "zod";
 
 const server = new McpCurlServer()

@@ -48,6 +48,11 @@ configs/*.json
 !configs/pagespeed.ts
 !configs/pagespeed-helpers.ts
 !configs/pagespeed-helpers.test.ts
+!configs/self-import.test.ts
 
 # Runtime output
 /output
+
+# Build output (rebuilt automatically by the `prepare` script on `npm install`,
+# and by `prepublishOnly` semantics during `npm pack`/`npm publish`)
+/dist

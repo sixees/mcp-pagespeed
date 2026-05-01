@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Decoupled from upstream `mcp-curl`** — removed the `upstream` git remote and reframed documentation
+  (`README.md`, `CLAUDE.md`, `docs/README.md`) so the project is described as a standalone PageSpeed MCP
+  server. The vendored library under `src/lib/` is now tracked solely in this repository with no public
+  API guarantees and is consumed only by `configs/`. Future versions will not pull from `mcp-curl`.
+- **Internal library docs relocated** — `docs/custom-tools.md` and `docs/hooks.md` moved to
+  `docs/internal/` and reframed as internal-only references (the vendored library is not a published
+  package).
+- **`package.json` metadata updated** — `name`, `description`, `repository`, `homepage`, `bugs`,
+  `keywords`, and `bin` now reflect this project rather than the upstream library.
+
+### Removed
+
+- **`docs/upstream-contributions.md`** — fork→upstream contribution audit, no longer relevant.
+- **`configs/README.md`** — generic library template (this repo only ships one config).
+- **`examples/basic`, `examples/with-hooks`, `examples/from-yaml`** — pure library demos, not
+  PageSpeed-relevant.
+- **`docs/todos/configure-unknown-fields.md`**, **`docs/todos/cache-utilities.md`**,
+  **`docs/todos/filter-preset-description.md`** — three resolved TODO files deleted
+  after verifying their fixes are already in place. Other todo files in
+  `docs/todos/` are unaffected.
+- **`configs/example.yaml.template`** — generic upstream library template (referenced
+  `import { createApiServer } from "mcp-curl"` and a deleted `examples/from-yaml/` directory).
+  No consumer in this repo; the PageSpeed server uses `configs/pagespeed.yaml`.
+
+### Added
+
+- **`CONTRIBUTING.md`** — brief contributor guide.
+- **`docs/internal/`** — landing area for internal library reference docs.
+- **`src/lib/README.md` Stability section** — documents the vendored, internal-only nature of the library.
+
+### Security
+
+- **`"private": true` in `package.json`** — prevents accidental `npm publish`. The library at `src/lib/`
+  is internal-only and not intended for the npm registry; this flag makes that explicit at the toolchain
+  level.
+
 ## [3.1.1] - 2026-04-30
 
 ### Security

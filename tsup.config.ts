@@ -7,7 +7,6 @@ export default defineConfig({
     entry: {
         "index": "src/index.ts",
         "lib": "src/lib.ts",
-        "lib/index": "src/lib/index.ts",
         "lib/schema/index": "src/lib/schema/index.ts",
     },
     format: ["esm"],

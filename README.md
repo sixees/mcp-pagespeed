@@ -7,8 +7,11 @@ purpose-built `analyze_pagespeed` tool plus a sandboxed `jq_query` helper for in
 
 ```bash
 git clone https://github.com/sixees/mcp-pagespeed.git
-cd mcp-pagespeed && npm install && npm run build
+cd mcp-pagespeed && npm install
 ```
+
+`npm install` triggers a `prepare` script that builds `dist/` automatically.
+Run `npm run build` again any time you edit `src/` or `configs/`.
 
 ## MCP Configuration
 

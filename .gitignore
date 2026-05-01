@@ -52,3 +52,7 @@ configs/*.json
 
 # Runtime output
 /output
+
+# Build output (rebuilt automatically by the `prepare` script on `npm install`,
+# and by `prepublishOnly` semantics during `npm pack`/`npm publish`)
+/dist

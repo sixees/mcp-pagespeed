@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: 004
 tags: [code-review, ci, hygiene]
@@ -48,3 +48,12 @@ which case the handoff and plan should say so), or it didn't happen.
 
 - Plan: `docs/plans/2026-04-30-chore-decouple-from-mcp-curl-and-cleanup-todos-plan.md` (item B14, line 200, criterion line 301)
 - Review finding: pattern-recognition-specialist (P2)
+
+## Work Log
+
+**2026-05-01** — Option A executed. Opened `.coderabbit.yaml` (8 lines total)
+and grepped for `mcp-curl|upstream|fork` — zero matches. The file contains
+only CodeRabbit review-profile configuration (assertive profile + summary
+instructions); no upstream references, no fork-era artifacts. Audit complete,
+zero changes needed. The plan/handoff claim that this file was audited is
+now factually accurate.

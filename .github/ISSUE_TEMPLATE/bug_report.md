@@ -1,38 +1,45 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Report a problem with the mcp-pagespeed MCP server
 title: ''
-labels: ''
+labels: bug
 assignees: ''
 
 ---
 
 **Describe the bug**
-A clear and concise description of what the bug is.
+A clear, concise description of what went wrong. If you got a tool error from
+the MCP client, include the literal error string.
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+**To reproduce**
+Steps to reproduce the behaviour:
+1. Run the server with `...`
+2. Invoke `analyze_pagespeed` with `{ url: ..., strategy: ..., filter_preset: ... }`
+3. Observe the error / unexpected output
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**Expected behaviour**
+What you expected to happen instead.
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+**Environment**
+ - mcp-pagespeed version: [e.g. 3.1.1, or commit hash]
+ - Node version: [`node --version`]
+ - OS: [e.g. macOS 14.5, Ubuntu 22.04]
+ - MCP client: [Claude Desktop / Claude Code / `npx tsx configs/pagespeed.ts` / other]
+ - Transport: [stdio / HTTP]
+ - `PAGESPEED_API_KEY`: [set / unset]
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+**Logs / output**
+Sanitised stderr or response output. **Redact API keys and any PII before
+pasting.** If the bug involves an injection-defense detection or audit event,
+include the `[injection-defense]` / `[pagespeed]` log lines.
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+If you can run with `PAGESPEED_DEBUG=1` and/or `PAGESPEED_AUDIT=1`, those
+logs are especially helpful.
+
+```
+<paste here>
+```
 
 **Additional context**
-Add any other context about the problem here.
+Anything else that helps triage — frequency, recent config changes, whether
+it reproduces against a specific URL.

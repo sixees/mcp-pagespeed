@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: 006
 tags: [code-review, packaging, hygiene, pre-existing]
@@ -60,3 +60,23 @@ addressing because:
 ## Resources
 
 - Review finding: security-sentinel (P3, pre-existing)
+
+## Work Log
+
+**2026-05-01** — Option A executed.
+- Added `dist/` to `.gitignore` with a comment cross-referencing the `prepare`
+  script.
+- Removed all 15 build artifacts from git via `git rm -r --cached dist/`.
+- Replaced `"prepublishOnly": "npm run build"` with `"prepare": "npm run build"`
+  in `package.json#scripts`. The `prepare` lifecycle is a strict superset of
+  `prepublishOnly`: it runs on `npm install` (consumer install AND fresh
+  `git clone && npm install`) and during `npm pack`/`npm publish`. This
+  preserves `git clone && npm install && node dist/index.js` ergonomics
+  even with dist gitignored.
+- Updated README "Setup" section to document the new flow: `npm install`
+  triggers `prepare` which builds dist automatically; `npm run build` is
+  documented for re-builds after editing `src/` or `configs/`.
+- Verified with `npm run build` from a clean state — `dist/lib.js` (301 B),
+  `dist/index.js` (1.19 KB), shared chunks all present.
+
+All acceptance criteria met.

@@ -324,3 +324,67 @@ Second pass on PR #3 — addresses the three P2 review findings (#001, #002, #00
 - `src/lib.ts` — update JSDoc header
 - `docs/todos/00{1..7}-pending-*.md` — **new** — 7 follow-up todos
 
+
+## P3 Cleanup Pass — 2026-05-01
+
+Third pass on PR #3 — addresses all four P3 review findings (#004, #005, #006, #007).
+The user deleted the three completed P2 todo files between passes, so only the P3
+todos appear in `docs/todos/` after this pass.
+
+### Changes
+
+- **#004 (ci, hygiene)** Audited `.coderabbit.yaml` (8 lines, only review-profile
+  config). Zero matches for `mcp-curl|upstream|fork`. Audit complete, zero changes
+  needed — the plan/handoff claim that this file was audited is now factually true
+  rather than aspirational.
+
+- **#005 (github, hygiene)** Replaced `.github/ISSUE_TEMPLATE/bug_report.md`. Removed
+  the GitHub stock browser/iOS/desktop sections. Now asks for: mcp-pagespeed version,
+  Node version, OS, MCP client (Claude Desktop / Claude Code / `npx tsx configs/pagespeed.ts`
+  / other), transport (stdio / HTTP), `PAGESPEED_API_KEY` status, and sanitised log
+  output with explicit redaction guidance and pointers to `PAGESPEED_DEBUG=1` /
+  `PAGESPEED_AUDIT=1`.
+
+- **#006 (packaging, hygiene, pre-existing)** Gitignored `dist/`. Switched
+  `package.json#scripts.prepublishOnly` → `prepare` (a strict superset that runs on
+  consumer install AND fresh `git clone && npm install`, plus `npm pack`/`npm publish`).
+  `git rm -r --cached dist/` removed the 15 tracked artifacts in the prior P2 commit
+  on this branch — `.gitignore` now codifies that. README "Setup" section documents
+  the new flow: `npm install` triggers `prepare` and builds `dist/` automatically.
+
+- **#007 (typescript, security, robustness)** Replaced the `Record<string, any>` API
+  response with a Zod `safeParse` at the JSON-parse boundary in `configs/pagespeed.ts`.
+  - New `PageSpeedResponseSchema` in `configs/pagespeed-helpers.ts` with
+    `.passthrough()` on the root, the `error` subobject, and every entry of
+    `error.errors` to tolerate Google's additive version drift. `lighthouseResult` is
+    intentionally `z.unknown().optional()` — the existing leniency-by-`?.`/`??` in
+    `extractScores`/`extractMetrics` would just be duplicated by a tighter Lighthouse
+    schema.
+  - Handler fail-closes on either parse failure (non-JSON body OR shape mismatch) with
+    the existing minimal-logging policy.
+  - The previous `if (data.error && typeof data.error === "object")` block with its
+    `Number()`/`typeof`/`Array.isArray` narrowing on every field is gone — Zod hands
+    `data.error.code/status/message/errors` through as typed optional fields.
+  - `buildTrustedMeta` signature narrowed from `data: Record<string, any>` to
+    `data: { id?: unknown }` so both the existing test fixtures and the Zod-typed call
+    site are assignable.
+  - 9 new tests in `configs/pagespeed-helpers.test.ts` cover the boundary:
+    minimal/typical/error-shape/version-drift/array-root/wrong-typed-id/wrong-typed-error-code.
+
+### Quality gate (post-P3)
+- `npm test` — **504 passing** (was 495), 7 skipped
+- `npm run typecheck` — clean
+- `npm run build` — clean (`dist/lib.js` 301 B, `dist/lib/schema/index.js` 663 B)
+
+### Files touched in P3 pass
+- `.coderabbit.yaml` — audited only (no changes)
+- `.github/ISSUE_TEMPLATE/bug_report.md` — replaced with MCP-relevant template
+- `.gitignore` — added `/dist`
+- `package.json` — `prepublishOnly` → `prepare`
+- `README.md` — Setup section reflects `prepare` lifecycle
+- `configs/pagespeed-helpers.ts` — `PageSpeedResponseSchema` + `PageSpeedResponse` type;
+  `buildTrustedMeta` signature narrowed
+- `configs/pagespeed.ts` — Zod `safeParse` boundary; dropped manual error-field narrowing;
+  imported `PageSpeedResponseSchema` + `PageSpeedResponse`
+- `configs/pagespeed-helpers.test.ts` — 9 new schema tests
+- `docs/todos/004..007-pending-*.md` → `004..007-complete-*.md` — record Work Log, mark complete

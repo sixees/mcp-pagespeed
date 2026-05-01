@@ -3,6 +3,35 @@
 // in pagespeed.ts). All round-trip-validation logic lives here; pagespeed.ts
 // is the boot script.
 
+import { z } from "zod";
+
+// JSON-parse boundary schema for PageSpeed Insights API v5 responses.
+// .passthrough() tolerates Google's additive version drift — new fields
+// arrive without breaking the parse. The named fields below are the ones
+// the handler actually reads; keeping them in one Zod object replaces the
+// ad-hoc `typeof`/`Array.isArray` narrowing the handler used to do on each
+// access. `lighthouseResult` stays `unknown` because the extractors below
+// (`extractScores`, `extractMetrics`) walk it leniently with `?.`/`??`.
+export const PageSpeedResponseSchema = z
+  .object({
+    id: z.string().optional(),
+    error: z
+      .object({
+        code: z.number().optional(),
+        status: z.string().optional(),
+        message: z.string().optional(),
+        errors: z
+          .array(z.object({ reason: z.string().optional() }).passthrough())
+          .optional(),
+      })
+      .passthrough()
+      .optional(),
+    lighthouseResult: z.unknown().optional(),
+  })
+  .passthrough();
+
+export type PageSpeedResponse = z.infer<typeof PageSpeedResponseSchema>;
+
 // `as const` so the literal types propagate; otherwise CATEGORIES would widen
 // to string[] and the handler couldn't depend on it being one of the four
 // known Lighthouse category names. Same reasoning for PRESETS below.
@@ -143,8 +172,15 @@ export function trustedAnalyzedUrl(
 // because formFactor is a controlled vocabulary already in scope at the
 // caller — there's no reason to trust the round-trip when we have the
 // authoritative value locally.
+//
+// `data` is intentionally narrowed to just the field this helper reads.
+// The handler in configs/pagespeed.ts now passes a Zod-validated
+// PageSpeedResponse (where `id` is `string | undefined`); narrowing here
+// to `{ id?: unknown }` keeps the helper compatible with the older
+// `Record<string, any>` callers in pagespeed-helpers.test.ts without
+// loosening the typed call site.
 export function buildTrustedMeta(
-  data: Record<string, any>,
+  data: { id?: unknown },
   inputUrl: string,
   inputStrategy: string | undefined,
   warnings: string[],

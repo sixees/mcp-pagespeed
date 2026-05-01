@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
+  PageSpeedResponseSchema,
   buildTrustedMeta,
   classifyApiError,
   extractMetrics,
@@ -358,5 +359,94 @@ describe("pickPreset", () => {
     expect(pickPreset("summary", scores, metrics, meta, [])).not.toHaveProperty(
       "warnings",
     );
+  });
+});
+
+describe("PageSpeedResponseSchema", () => {
+  it("accepts a minimal valid response (object root)", () => {
+    const result = PageSpeedResponseSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a typical lighthouse response with id and lighthouseResult", () => {
+    const result = PageSpeedResponseSchema.safeParse({
+      id: "https://example.com/",
+      lighthouseResult: { categories: {}, audits: {} },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.id).toBe("https://example.com/");
+      // lighthouseResult is `unknown` — should pass through verbatim
+      expect(result.data.lighthouseResult).toEqual({
+        categories: {},
+        audits: {},
+      });
+    }
+  });
+
+  it("accepts a typical Google API error response", () => {
+    const result = PageSpeedResponseSchema.safeParse({
+      error: {
+        code: 429,
+        status: "RESOURCE_EXHAUSTED",
+        message: "Quota exceeded",
+        errors: [{ reason: "rateLimitExceeded", domain: "global" }],
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.error?.code).toBe(429);
+      expect(result.data.error?.status).toBe("RESOURCE_EXHAUSTED");
+      expect(result.data.error?.errors?.[0]?.reason).toBe("rateLimitExceeded");
+    }
+  });
+
+  it("tolerates unknown top-level fields (Google version drift)", () => {
+    // .passthrough() means new additive fields don't break the parse —
+    // this guards the trust boundary against a future API update that
+    // would otherwise reject every response.
+    const result = PageSpeedResponseSchema.safeParse({
+      id: "https://example.com/",
+      kind: "pagespeedonline#result",
+      captchaResult: "CAPTCHA_NOT_NEEDED",
+      analysisUTCTimestamp: "2026-05-01T00:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("tolerates unknown nested fields inside error.errors entries", () => {
+    const result = PageSpeedResponseSchema.safeParse({
+      error: {
+        code: 400,
+        errors: [
+          { reason: "badRequest", message: "extra field", location: "url" },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a non-object root (string body)", () => {
+    expect(PageSpeedResponseSchema.safeParse("not an object").success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a non-object root (array body)", () => {
+    // Zod 4 z.object() rejects arrays at the root, which is what we want —
+    // a JSON array is not a valid PageSpeed response and must fail closed.
+    expect(PageSpeedResponseSchema.safeParse([]).success).toBe(false);
+  });
+
+  it("rejects a wrong-typed id field", () => {
+    expect(
+      PageSpeedResponseSchema.safeParse({ id: 12345 }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a wrong-typed error.code", () => {
+    expect(
+      PageSpeedResponseSchema.safeParse({ error: { code: "429" } }).success,
+    ).toBe(false);
   });
 });

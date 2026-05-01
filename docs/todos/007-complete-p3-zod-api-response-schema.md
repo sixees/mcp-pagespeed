@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: 007
 tags: [code-review, typescript, security, robustness]
@@ -82,3 +82,35 @@ const PageSpeedResponseSchema = z.object({
 
 - Review finding: typescript-reviewer (P2)
 - Existing CLAUDE.md design decision: `Record<string, any>` for API response
+
+## Work Log
+
+**2026-05-01** — Option A executed.
+- `configs/pagespeed-helpers.ts`: added `PageSpeedResponseSchema` (Zod)
+  with `.passthrough()` on the root object, the `error` subobject, and
+  every entry of `error.errors`. Documented why `lighthouseResult` is left
+  as `z.unknown().optional()` (extractors walk it leniently with `?.`/`??`).
+  Exported `PageSpeedResponse` type alias.
+- `configs/pagespeed-helpers.ts`: narrowed `buildTrustedMeta` from
+  `data: Record<string, any>` to `data: { id?: unknown }`. Both the existing
+  `Record<string, any>` test fixtures and the new Zod-typed call site are
+  assignable.
+- `configs/pagespeed.ts`: replaced the `JSON.parse → Record<string, any>`
+  block with `JSON.parse → PageSpeedResponseSchema.safeParse → fail-closed
+  branch`. The `.success === false` path returns the existing trust-model
+  error message ("unexpected response shape") with the same minimal-logging
+  policy as the non-JSON branch.
+- `configs/pagespeed.ts`: dropped the `typeof`/`Array.isArray` narrowing
+  on `data.error.code/status/errors/message`. Zod hands those through as
+  typed optional fields, so the handler now reads `data.error.code ?? 0`
+  directly.
+- `configs/pagespeed.ts`: kept the `lighthouseResult` runtime guard
+  (`!data.lighthouseResult || typeof !== "object"`) because Zod gives
+  back `unknown`; cast to `Record<string, any>` at the extractor call site.
+- `configs/pagespeed-helpers.test.ts`: added 9 new tests covering
+  minimal/typical/error-shape/version-drift/array-root/wrong-typed-id/
+  wrong-typed-error-code cases. Total tests now 504 passing.
+- Quality gate: `npm run typecheck` clean, `npm test` 504/504 passing,
+  `npm run build` clean (`dist/lib.js` 301 B, schema 663 B).
+
+All acceptance criteria met.

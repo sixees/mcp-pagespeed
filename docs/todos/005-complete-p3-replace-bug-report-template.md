@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p3
 issue_id: 005
 tags: [code-review, github, hygiene]
@@ -63,3 +63,14 @@ Replace browser/device fields with:
 
 - Review finding: pattern-recognition-specialist (P2)
 - Handoff: deferred under "Known issues"
+
+## Work Log
+
+**2026-05-01** — Option A executed. Rewrote `.github/ISSUE_TEMPLATE/bug_report.md`
+to reflect MCP-server reality: removed browser/iOS/desktop sections; replaced
+with prompts for mcp-pagespeed version, Node version, OS, MCP client (Claude
+Desktop / Claude Code / direct stdio / other), transport (stdio / HTTP),
+`PAGESPEED_API_KEY` status, and sanitised log output (with explicit redaction
+guidance and pointers to `PAGESPEED_DEBUG=1` / `PAGESPEED_AUDIT=1`). The
+"To reproduce" section now scaffolds an `analyze_pagespeed` invocation rather
+than a browser flow. Acceptance criteria met.

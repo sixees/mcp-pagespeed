@@ -7,9 +7,10 @@
 // touch the self-import path. The runtime failure would only surface when
 // the MCP server actually boots.
 //
-// This test pins the contract: name === "mcp-pagespeed", and the four
-// expected subpaths (".", "./cli", "./lib", "./schema") are present in
-// #exports. Cheap insurance against the only realistic rename regression.
+// This test pins the contract: name === "mcp-pagespeed", and the three
+// expected subpaths (".", "./cli", "./schema") are present in #exports.
+// `./lib` was removed in the barrel-trim pass — no in-tree consumer.
+// Cheap insurance against the only realistic rename regression.
 
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";

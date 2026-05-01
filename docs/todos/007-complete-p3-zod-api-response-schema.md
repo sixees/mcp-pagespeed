@@ -47,6 +47,7 @@ if (data.error && typeof data.error === "object") {
 ## Proposed Solutions
 
 ### Option A: narrow Zod schema with `.passthrough()`
+
 ```typescript
 const PageSpeedResponseSchema = z.object({
   error: z
@@ -62,11 +63,13 @@ const PageSpeedResponseSchema = z.object({
   id: z.string().optional(),
 }).passthrough();
 ```
+
 - Pros: replaces ~25 lines of guard code with one `safeParse`; fields land typed.
 - Cons: small one-time schema definition.
 - Effort: S.
 
 ### Option B: leave as-is
+
 - Status quo. Acceptable; CLAUDE.md documents the trade-off.
 
 **Recommendation:** Option A as a follow-up.

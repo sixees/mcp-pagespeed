@@ -32,6 +32,7 @@ addressing because:
 ## Proposed Solutions
 
 ### Option A: gitignore `dist/`, rebuild on every consumer install/publish
+
 - Add `dist/` to `.gitignore`.
 - `git rm -r --cached dist/`.
 - Trust `prepublishOnly` to rebuild.
@@ -43,6 +44,7 @@ addressing because:
 - Effort: S.
 
 ### Option B: keep dist tracked, add a CI check
+
 - CI fails if `dist/` is out-of-date relative to `src/` at commit time.
 - Pros: keeps `git clone && run` ergonomic.
 - Cons: brittle CI; extra noise on every PR.

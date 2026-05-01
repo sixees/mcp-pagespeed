@@ -36,7 +36,7 @@ include the `[injection-defense]` / `[pagespeed]` log lines.
 If you can run with `PAGESPEED_DEBUG=1` and/or `PAGESPEED_AUDIT=1`, those
 logs are especially helpful.
 
-```
+```text
 <paste here>
 ```
 

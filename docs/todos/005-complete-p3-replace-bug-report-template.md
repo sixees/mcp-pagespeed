@@ -22,7 +22,8 @@ web-app fork.
 ## Findings
 
 `.github/ISSUE_TEMPLATE/bug_report.md:24-35`:
-```
+
+```text
 **Desktop (please complete the following information):**
  - OS: [e.g. iOS]
  - Browser [e.g. chrome, safari]
@@ -37,6 +38,7 @@ web-app fork.
 ## Proposed Solutions
 
 ### Option A: rewrite for MCP context
+
 Replace browser/device fields with:
 - MCP client (Claude Desktop / Claude Code / `npx tsx configs/pagespeed.ts` / other)
 - Node version (`node --version`)
@@ -48,6 +50,7 @@ Replace browser/device fields with:
 - Effort: XS.
 
 ### Option B: delete the template, rely on GitHub's free-form issue form
+
 - Pros: zero maintenance.
 - Cons: no structured triage signals.
 - Effort: XS.

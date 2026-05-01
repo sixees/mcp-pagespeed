@@ -151,8 +151,13 @@ shipped as a single PR.
 
 ## Testing summary
 
-- **Tests added:** none new — this is a decoupling pass with no behavioural changes.
-- **Passing:** yes — `npm test` reports 493 passing, 7 skipped, across 22 files.
+- **Tests added:** none in the original work pass (decoupling has no behavioural changes).
+  The review pass added `configs/self-import.test.ts` (2 tests) to pin the package-name +
+  `#exports` contract; the P3 pass added 9 tests in `configs/pagespeed-helpers.test.ts`
+  for the new `PageSpeedResponseSchema`. See "Files modified during review" and
+  "P3 Cleanup Pass" below.
+- **Passing:** yes — `npm test` reports 493 passing in the original work pass, 7 skipped,
+  across 22 files. After review fixes: 495. After P3 pass: 504.
 - **Linting / typecheck:** `npm run typecheck` (the closest the project has to lint) passes both
   `tsconfig.json` and `tsconfig.fork.json`.
 - **Build:** `npm run build` produces clean ESM output. `dist/` bundles unchanged (self-import strings
@@ -163,7 +168,9 @@ shipped as a single PR.
 
 ## Commit history
 
-Single commit on `chore/decouple-from-mcp-curl` (will be added in the commit step).
+Multiple commits on `chore/decouple-from-mcp-curl` — the original work-pass commit,
+followed by the review-fix commit, the P2 cleanup commit, and the P3 cleanup commit.
+Use `git log main..HEAD` for the authoritative list.
 
 ## Review context
 
@@ -208,6 +215,7 @@ deleted in this PR. No new todos created in `docs/todos/`.
 ## Code Review — 2026-04-30
 
 ### Review Summary
+
 - **Reviewer:** automated multi-agent review
 - **Focus areas requested:** SRP/DRY, security, performance, TypeScript MCP best practices
 - **Agents used:** code-simplicity-reviewer, security-sentinel, performance-oracle, typescript-reviewer, architecture-strategist, pattern-recognition-specialist
@@ -236,6 +244,7 @@ The builder's claim "Tests pass (493 passing)" verified — re-run on the same
 commit produced the same number. After review fixes: **495 passing**, 7 skipped.
 
 ### Verified Claims
+
 | Handoff Claim | Verified? | Notes |
 |---------------|-----------|-------|
 | Tests pass (493 passing) | yes | Re-ran `npm test`; identical numbers. After review fixes: 495. |
@@ -276,6 +285,7 @@ commit produced the same number. After review fixes: **495 passing**, 7 skipped.
 | `docs/todos/007-pending-p3-zod-api-response-schema.md` | P3 | Replace `Record<string, any>` API response with narrow Zod schema | code-review |
 
 ### Blockers
+
 **None — clear to merge.** All P1 findings fixed in this review pass. All
 three P2 items addressed in the second pass below. Remaining P3 items
 tracked as todos for follow-up PRs.
@@ -285,6 +295,7 @@ tracked as todos for follow-up PRs.
 Second pass on PR #3 — addresses the three P2 review findings (#001, #002, #003).
 
 ### Changes
+
 - **#002 (architecture, packaging):** `package.json#files` switched from `["dist","docs"]` to an
   explicit allow-list. `npm pack --dry-run` confirms `docs/plans/`, `docs/work/`, and `docs/todos/`
   no longer ship.
@@ -300,11 +311,13 @@ Second pass on PR #3 — addresses the three P2 review findings (#001, #002, #00
   updated to assert 3 subpaths instead of 4. `dist/lib.js` shrank from 921 B → 301 B.
 
 ### Quality gate (post-P2)
+
 - `npm test` — **495 passing**, 7 skipped
 - `npm run typecheck` — clean
 - `npm run build` — clean
 
 ### Files touched in P2 pass
+
 - `package.json` — narrow `files` allow-list; remove `./lib` from `#exports`
 - `src/lib.ts` — trimmed to consumer-needed re-exports + `PageSpeedServer` alias
 - `src/lib/index.ts` — **deleted** (unused barrel)
@@ -315,6 +328,7 @@ Second pass on PR #3 — addresses the three P2 review findings (#001, #002, #00
 - `docs/todos/001..003-pending-*.md` → `001..003-complete-*.md` — record Work Log, mark complete
 
 ### Files modified during review
+
 - `CLAUDE.md` — fix stale `"mcp-curl"` import string
 - `CHANGELOG.md` — tighten Security bullet wording; record `example.yaml.template` removal
 - `configs/example.yaml.template` — **deleted** (broken import + reference to deleted directory)
@@ -331,7 +345,7 @@ Third pass on PR #3 — addresses all four P3 review findings (#004, #005, #006,
 The user deleted the three completed P2 todo files between passes, so only the P3
 todos appear in `docs/todos/` after this pass.
 
-### Changes
+### Changes (P3)
 
 - **#004 (ci, hygiene)** Audited `.coderabbit.yaml` (8 lines, only review-profile
   config). Zero matches for `mcp-curl|upstream|fork`. Audit complete, zero changes
@@ -372,11 +386,13 @@ todos appear in `docs/todos/` after this pass.
     minimal/typical/error-shape/version-drift/array-root/wrong-typed-id/wrong-typed-error-code.
 
 ### Quality gate (post-P3)
+
 - `npm test` — **504 passing** (was 495), 7 skipped
 - `npm run typecheck` — clean
 - `npm run build` — clean (`dist/lib.js` 301 B, `dist/lib/schema/index.js` 663 B)
 
 ### Files touched in P3 pass
+
 - `.coderabbit.yaml` — audited only (no changes)
 - `.github/ISSUE_TEMPLATE/bug_report.md` — replaced with MCP-relevant template
 - `.gitignore` — added `/dist`
@@ -388,3 +404,61 @@ todos appear in `docs/todos/` after this pass.
   imported `PageSpeedResponseSchema` + `PageSpeedResponse`
 - `configs/pagespeed-helpers.test.ts` — 9 new schema tests
 - `docs/todos/004..007-pending-*.md` → `004..007-complete-*.md` — record Work Log, mark complete
+
+## Review Comments Addressed — 2026-05-01
+
+Fourth pass on PR #3 — addresses all 12 unresolved review threads (11 from
+@coderabbitai, 1 from @gemini-code-assist). All 11 coderabbitai threads were
+resolved with code/doc changes; the gemini thread is a false positive (the
+package.json#exports map already contains the mappings the reviewer claimed
+were missing) and was left open with an explanatory reply for human
+confirmation.
+
+### Changes Made
+
+| Comment | Reviewer | Category | Action Taken |
+|---------|----------|----------|--------------|
+| CHANGELOG.md:29 — wildcard `**docs/todos/***` bullet implies all todos deleted | @coderabbitai | Fix needed | Replaced with explicit list of three deleted files + sentence noting other todos are unaffected |
+| configs/self-import.test.ts:12 — header comment lists 4 subpaths | @coderabbitai | Fix needed | Header comment now lists three subpaths (`.`, `./cli`, `./schema`) and notes `./lib` was removed in barrel-trim pass |
+| docs/plans/...:86 — malformed 4-column table rows | @coderabbitai | Fix needed | Replaced em-dash separator with proper pipe so each row has 4 cells |
+| docs/work/handoff:163 — test-history contradiction | @coderabbitai | Fix needed | Testing summary now reads "493 → 495 → 504" across three passes |
+| docs/work/handoff:167 — stale "single commit" statement | @coderabbitai | Fix needed | Replaced with "Multiple commits ... use `git log main..HEAD`" |
+| docs/work/handoff:239 — markdownlint MD022 violations under H3 headings | @coderabbitai | Fix needed | Added blank lines under 10 H3 headings in the review/P2/P3 sections |
+| package.json:21 — `.` allegedly points to `./dist/index.js`, `./cli` allegedly missing | @gemini-code-assist | False positive | Verified `package.json#exports` already has `.` → `./dist/lib.js` and `./cli` present; replied with diff snippet |
+| .github/ISSUE_TEMPLATE/bug_report.md:41 — missing fence language (MD040) | @coderabbitai | Fix needed | Added `text` language tag to placeholder block |
+| docs/todos/004:38 — MD022 spacing under H3 | @coderabbitai | Fix needed | Added blank lines under `### Option A` and `### Option B` |
+| docs/todos/005:53 — MD031/MD040/MD022 in fenced block + option headings | @coderabbitai | Fix needed | Added `text` fence tag, blank line before fence, blank lines under both option H3s |
+| docs/todos/006:53 — MD022 under H3 | @coderabbitai | Fix needed | Added blank lines under `### Option A` and `### Option B` |
+| docs/todos/007:70 — MD031/MD022 around typescript fence + option H3s | @coderabbitai | Fix needed | Added blank lines around the fence and under both option H3s |
+
+### Decisions Revised
+
+None — all coderabbitai findings were straightforward documentation/lint
+fixes. The gemini finding was rejected as a false positive (claim contradicts
+the actual file state).
+
+### Resolved Todos
+
+None — no `docs/todos/` files were resolved this pass.
+
+### Outstanding Todos
+
+None.
+
+### Files Modified
+
+- `CHANGELOG.md` — narrowed wildcard bullet to three explicit filenames
+- `configs/self-import.test.ts` — header comment updated
+- `docs/plans/2026-04-30-chore-decouple-from-mcp-curl-and-cleanup-todos-plan.md` — table separator fix
+- `docs/work/handoff-chore-decouple-from-mcp-curl.md` — test-history line, "single commit" line, MD022 blank lines under 10 H3 headings, this section
+- `.github/ISSUE_TEMPLATE/bug_report.md` — `text` fence language
+- `docs/todos/004-complete-p3-audit-coderabbit-yaml.md` — MD022 H3 blank lines
+- `docs/todos/005-complete-p3-replace-bug-report-template.md` — MD031/MD040 fence + MD022 H3 blank lines
+- `docs/todos/006-complete-p3-gitignore-dist.md` — MD022 H3 blank lines
+- `docs/todos/007-complete-p3-zod-api-response-schema.md` — MD031 fence + MD022 H3 blank lines
+
+### Quality gate (post-review-fixes)
+
+- `npm test` — **504 passing**, 7 skipped (no test code touched)
+- All 11 coderabbitai threads resolved via GraphQL `addPullRequestReviewThreadReply` + `resolveReviewThread`
+- Gemini thread left unresolved with explanatory reply (false-positive)

@@ -25,8 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`configs/README.md`** — generic library template (this repo only ships one config).
 - **`examples/basic`, `examples/with-hooks`, `examples/from-yaml`** — pure library demos, not
   PageSpeed-relevant.
-- **`docs/todos/*`** — three resolved TODOs (`configure-unknown-fields`, `cache-utilities`,
-  `filter-preset-description`) deleted after verifying their fixes are in place.
+- **`docs/todos/configure-unknown-fields.md`**, **`docs/todos/cache-utilities.md`**,
+  **`docs/todos/filter-preset-description.md`** — three resolved TODO files deleted
+  after verifying their fixes are already in place. Other todo files in
+  `docs/todos/` are unaffected.
 - **`configs/example.yaml.template`** — generic upstream library template (referenced
   `import { createApiServer } from "mcp-curl"` and a deleted `examples/from-yaml/` directory).
   No consumer in this repo; the PageSpeed server uses `configs/pagespeed.yaml`.

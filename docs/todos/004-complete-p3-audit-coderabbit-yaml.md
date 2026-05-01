@@ -28,11 +28,13 @@ which case the handoff and plan should say so), or it didn't happen.
 ## Proposed Solutions
 
 ### Option A: actually audit it
+
 - Open `.coderabbit.yaml`, grep for `mcp-curl|upstream|fork`, decide.
 - If nothing to change, leave a note in the handoff acknowledgement.
 - Effort: XS (5 min).
 
 ### Option B: remove `.coderabbit.yaml` from the plan's acceptance criteria
+
 - If we never intended to audit it, remove the claim from the plan/handoff
   to keep documentation honest.
 - Effort: XS.

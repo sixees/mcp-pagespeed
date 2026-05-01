@@ -31,11 +31,11 @@ describe("package self-import contract", () => {
 
   it("exposes the subpaths configs/pagespeed.ts depends on", () => {
     // The entry point imports `"mcp-pagespeed"` (the "." subpath) and
-    // `"mcp-pagespeed/schema"`. Keep the other two we own (./cli, ./lib)
-    // pinned too so a future trim of #exports is a deliberate decision,
-    // not an accident.
+    // `"mcp-pagespeed/schema"`. `./cli` is the bin entry. `./lib` was
+    // removed in the barrel-trim pass — it had no in-tree consumer, so
+    // keeping it would have re-grown the surface for free.
     expect(Object.keys(pkg.exports).sort()).toEqual(
-      [".", "./cli", "./lib", "./schema"].sort(),
+      [".", "./cli", "./schema"].sort(),
     );
   });
 });

@@ -32,7 +32,7 @@ import {
   stopRateLimitCleanup,
   validateFilePath,
   validateOutputDir
-} from "./chunk-7XRLVBRW.js";
+} from "./chunk-YEBRJN4U.js";
 
 // src/lib/server/lifecycle.ts
 var httpServer = null;
@@ -91,6 +91,122 @@ function registerShutdownHandlers() {
     });
   });
 }
+
+// src/lib/transports/http.ts
+import express from "express";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { randomUUID as randomUUID2 } from "crypto";
+
+// src/lib/session/session-manager.ts
+var SessionManager = class {
+  /**
+   * Create a new session manager with optional custom max sessions.
+   * @param maxSessions - Maximum number of concurrent sessions (default: SESSION.MAX_SESSIONS)
+   * @throws Error if maxSessions is not a positive integer
+   */
+  constructor(maxSessions = SESSION.MAX_SESSIONS) {
+    this.maxSessions = maxSessions;
+    if (!Number.isInteger(maxSessions) || maxSessions < 1) {
+      throw new Error(`maxSessions must be a positive integer, got: ${maxSessions}`);
+    }
+  }
+  sessions = /* @__PURE__ */ new Map();
+  cleanupInterval = null;
+  /**
+   * Check if a session exists.
+   */
+  has(id) {
+    return this.sessions.has(id);
+  }
+  /**
+   * Get a session by ID.
+   */
+  get(id) {
+    return this.sessions.get(id);
+  }
+  /**
+   * Store a session.
+   * @throws Error if session limit is reached
+   */
+  set(id, session) {
+    if (!this.sessions.has(id) && this.sessions.size >= this.maxSessions) {
+      throw new Error(`Session limit reached (max: ${this.maxSessions})`);
+    }
+    this.sessions.set(id, session);
+  }
+  /**
+   * Delete a session.
+   */
+  delete(id) {
+    this.sessions.delete(id);
+  }
+  /**
+   * Get the number of active sessions.
+   */
+  get size() {
+    return this.sessions.size;
+  }
+  /**
+   * Iterate over all sessions.
+   */
+  entries() {
+    return this.sessions.entries();
+  }
+  /**
+   * Start periodic cleanup of idle sessions.
+   * Sessions that exceed SESSION.IDLE_TIMEOUT_MS without activity are closed.
+   */
+  startCleanup() {
+    if (this.cleanupInterval) {
+      return;
+    }
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [id, session] of this.sessions) {
+        if (now - session.lastActivity > SESSION.IDLE_TIMEOUT_MS) {
+          try {
+            session.transport.close();
+          } catch (error) {
+            console.error(`Warning: Error closing idle session ${id} transport:`, error);
+          }
+          void session.server.close().catch((error) => {
+            console.error(`Warning: Error closing idle session ${id} server:`, error);
+          });
+          this.sessions.delete(id);
+        }
+      }
+    }, SESSION.CLEANUP_INTERVAL_MS);
+    this.cleanupInterval.unref();
+  }
+  /**
+   * Stop the cleanup interval.
+   */
+  stopCleanup() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+  }
+  /**
+   * Close all active sessions gracefully.
+   * Used during server shutdown.
+   */
+  async closeAll() {
+    for (const [sessionId, session] of this.sessions) {
+      try {
+        session.transport.close();
+      } catch (error) {
+        console.error(`Warning: Error closing session ${sessionId} transport:`, error);
+      }
+      try {
+        await session.server.close();
+      } catch (error) {
+        console.error(`Warning: Error closing session ${sessionId} server:`, error);
+      }
+      this.sessions.delete(sessionId);
+    }
+  }
+};
 
 // src/lib/server/server-factory.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -208,6 +324,12 @@ function registerJqQueryTool(server) {
     JQ_QUERY_TOOL_META,
     async (params, extra) => executeJqQuery(params, extra)
   );
+}
+
+// src/lib/tools/index.ts
+function registerAllTools(server) {
+  registerCurlExecuteTool(server);
+  registerJqQueryTool(server);
 }
 
 // src/lib/resources/documentation.ts
@@ -459,6 +581,16 @@ function registerAllPrompts(server) {
   registerApiDiscoveryPrompt(server);
 }
 
+// src/lib/server/registration.ts
+function registerAllCapabilities(server) {
+  registerAllTools(server);
+  registerAllResources(server);
+  registerAllPrompts(server);
+}
+
+// src/lib/extensible/mcp-curl-server.ts
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
 // src/lib/extensible/instance-utilities.ts
 function createInstanceUtilities(config) {
   return {
@@ -515,138 +647,6 @@ function createInstanceUtilities(config) {
     }
   };
 }
-
-// src/lib/transports/http.ts
-import express from "express";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID as randomUUID2 } from "crypto";
-
-// src/lib/session/session-manager.ts
-var SessionManager = class {
-  /**
-   * Create a new session manager with optional custom max sessions.
-   * @param maxSessions - Maximum number of concurrent sessions (default: SESSION.MAX_SESSIONS)
-   * @throws Error if maxSessions is not a positive integer
-   */
-  constructor(maxSessions = SESSION.MAX_SESSIONS) {
-    this.maxSessions = maxSessions;
-    if (!Number.isInteger(maxSessions) || maxSessions < 1) {
-      throw new Error(`maxSessions must be a positive integer, got: ${maxSessions}`);
-    }
-  }
-  sessions = /* @__PURE__ */ new Map();
-  cleanupInterval = null;
-  /**
-   * Check if a session exists.
-   */
-  has(id) {
-    return this.sessions.has(id);
-  }
-  /**
-   * Get a session by ID.
-   */
-  get(id) {
-    return this.sessions.get(id);
-  }
-  /**
-   * Store a session.
-   * @throws Error if session limit is reached
-   */
-  set(id, session) {
-    if (!this.sessions.has(id) && this.sessions.size >= this.maxSessions) {
-      throw new Error(`Session limit reached (max: ${this.maxSessions})`);
-    }
-    this.sessions.set(id, session);
-  }
-  /**
-   * Delete a session.
-   */
-  delete(id) {
-    this.sessions.delete(id);
-  }
-  /**
-   * Get the number of active sessions.
-   */
-  get size() {
-    return this.sessions.size;
-  }
-  /**
-   * Iterate over all sessions.
-   */
-  entries() {
-    return this.sessions.entries();
-  }
-  /**
-   * Start periodic cleanup of idle sessions.
-   * Sessions that exceed SESSION.IDLE_TIMEOUT_MS without activity are closed.
-   */
-  startCleanup() {
-    if (this.cleanupInterval) {
-      return;
-    }
-    this.cleanupInterval = setInterval(() => {
-      const now = Date.now();
-      for (const [id, session] of this.sessions) {
-        if (now - session.lastActivity > SESSION.IDLE_TIMEOUT_MS) {
-          try {
-            session.transport.close();
-          } catch (error) {
-            console.error(`Warning: Error closing idle session ${id} transport:`, error);
-          }
-          void session.server.close().catch((error) => {
-            console.error(`Warning: Error closing idle session ${id} server:`, error);
-          });
-          this.sessions.delete(id);
-        }
-      }
-    }, SESSION.CLEANUP_INTERVAL_MS);
-    this.cleanupInterval.unref();
-  }
-  /**
-   * Stop the cleanup interval.
-   */
-  stopCleanup() {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-  }
-  /**
-   * Close all active sessions gracefully.
-   * Used during server shutdown.
-   */
-  async closeAll() {
-    for (const [sessionId, session] of this.sessions) {
-      try {
-        session.transport.close();
-      } catch (error) {
-        console.error(`Warning: Error closing session ${sessionId} transport:`, error);
-      }
-      try {
-        await session.server.close();
-      } catch (error) {
-        console.error(`Warning: Error closing session ${sessionId} server:`, error);
-      }
-      this.sessions.delete(sessionId);
-    }
-  }
-};
-
-// src/lib/tools/index.ts
-function registerAllTools(server) {
-  registerCurlExecuteTool(server);
-  registerJqQueryTool(server);
-}
-
-// src/lib/server/registration.ts
-function registerAllCapabilities(server) {
-  registerAllTools(server);
-  registerAllResources(server);
-  registerAllPrompts(server);
-}
-
-// src/lib/extensible/mcp-curl-server.ts
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 // src/lib/extensible/tool-wrapper.ts
 import { randomUUID } from "crypto";
@@ -1467,11 +1467,7 @@ export {
   initializeLifecycle,
   registerShutdownHandlers,
   createServer,
-  executeJqQuery,
-  registerAllResources,
-  registerAllPrompts,
   registerAllCapabilities,
-  createInstanceUtilities,
   runHTTP,
   McpCurlServer
 };

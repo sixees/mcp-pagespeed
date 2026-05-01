@@ -1,55 +1,6 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-/**
- * Schema for structured cURL execution.
- * Validates all parameters for the curl_execute tool.
- */
-declare const CurlExecuteSchema: z.ZodObject<{
-    url: z.ZodURL;
-    method: z.ZodOptional<z.ZodEnum<{
-        GET: "GET";
-        POST: "POST";
-        PUT: "PUT";
-        PATCH: "PATCH";
-        DELETE: "DELETE";
-        HEAD: "HEAD";
-        OPTIONS: "OPTIONS";
-    }>>;
-    headers: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
-    data: z.ZodOptional<z.ZodString>;
-    form: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
-    follow_redirects: z.ZodDefault<z.ZodBoolean>;
-    max_redirects: z.ZodOptional<z.ZodNumber>;
-    insecure: z.ZodDefault<z.ZodBoolean>;
-    timeout: z.ZodOptional<z.ZodNumber>;
-    user_agent: z.ZodOptional<z.ZodString>;
-    basic_auth: z.ZodOptional<z.ZodString>;
-    bearer_token: z.ZodOptional<z.ZodString>;
-    verbose: z.ZodDefault<z.ZodBoolean>;
-    include_headers: z.ZodDefault<z.ZodBoolean>;
-    compressed: z.ZodDefault<z.ZodBoolean>;
-    include_metadata: z.ZodDefault<z.ZodBoolean>;
-    jq_filter: z.ZodOptional<z.ZodString>;
-    max_result_size: z.ZodOptional<z.ZodNumber>;
-    save_to_file: z.ZodOptional<z.ZodBoolean>;
-    output_dir: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
-/** Inferred TypeScript type from CurlExecuteSchema */
-type CurlExecuteInput = z.infer<typeof CurlExecuteSchema>;
-/**
- * Schema for jq_query tool (query JSON files without HTTP requests).
- */
-declare const JqQuerySchema: z.ZodObject<{
-    filepath: z.ZodString;
-    jq_filter: z.ZodString;
-    max_result_size: z.ZodOptional<z.ZodNumber>;
-    save_to_file: z.ZodOptional<z.ZodBoolean>;
-    output_dir: z.ZodOptional<z.ZodString>;
-}, z.core.$strip>;
-/** Inferred TypeScript type from JqQuerySchema */
-type JqQueryInput = z.infer<typeof JqQuerySchema>;
-
 /** Tool result type returned by executeCurlRequest */
 interface CurlExecuteResult {
     [key: string]: unknown;
@@ -65,15 +16,6 @@ interface CurlExecuteExtra {
     /** Override env var for allowing localhost requests (from McpCurlConfig) */
     allowLocalhost?: boolean;
 }
-/**
- * Execute a cURL request with the given parameters.
- * This is the core handler logic extracted for reuse by McpCurlServer.
- *
- * @param params - Validated curl_execute parameters
- * @param extra - Additional context (sessionId for rate limiting)
- * @returns Tool result with response content
- */
-declare function executeCurlRequest(params: CurlExecuteInput, extra?: CurlExecuteExtra): Promise<CurlExecuteResult>;
 
 /**
  * API Schema version for forward compatibility.
@@ -213,6 +155,37 @@ interface ApiSchema {
 }
 
 /**
+ * Error thrown when loading an API schema fails.
+ */
+declare class ApiSchemaLoadError extends Error {
+    readonly cause?: Error | undefined;
+    constructor(message: string, cause?: Error | undefined);
+}
+/**
+ * Load and validate an API schema from a YAML file.
+ *
+ * SECURITY: This function reads from the filesystem. Ensure definitionPath
+ * comes from a trusted source (not user input) to prevent path traversal attacks.
+ * Path validation should be performed at the application boundary (CLI, HTTP handler).
+ *
+ * @param definitionPath - Path to the YAML definition file
+ * @returns Validated ApiSchema
+ * @throws ApiSchemaLoadError if file cannot be read or parsed
+ * @throws ApiSchemaValidationError if schema validation fails
+ */
+declare function loadApiSchema(definitionPath: string): Promise<ApiSchema>;
+/**
+ * Load and validate an API schema from a YAML string.
+ * Useful for testing or inline schema definitions.
+ *
+ * @param yamlContent - YAML content as a string
+ * @returns Validated ApiSchema
+ * @throws ApiSchemaLoadError if YAML parsing fails
+ * @throws ApiSchemaValidationError if schema validation fails
+ */
+declare function loadApiSchemaFromString(yamlContent: string): ApiSchema;
+
+/**
  * Error thrown when authentication is required but not available.
  */
 declare class AuthenticationError extends Error {
@@ -303,4 +276,4 @@ declare function generateToolDefinitions(schema: ApiSchema, config?: GeneratorCo
     handler: (params: Record<string, unknown>, extra?: CurlExecuteExtra) => Promise<CurlExecuteResult>;
 }>;
 
-export { type ApiDefaults as A, type CurlExecuteInput as C, type EndpointDefinition as E, type GeneratorConfig as G, type HttpMethod as H, type JqQueryInput as J, type ParameterLocation as P, type ResponseConfig as R, type ApiInfo as a, type ApiSchema as b, type ApiSchemaVersion as c, type AuthConfig as d, AuthenticationError as e, type EndpointParameter as f, type ParameterType as g, buildUrl as h, generateInputSchema as i, generateToolDefinitions as j, getAuthConfig as k, CurlExecuteSchema as l, JqQuerySchema as m, executeCurlRequest as n, type CurlExecuteResult as o, getMethodAnnotations as p, registerEndpointTools as r };
+export { type ApiSchema as A, type CurlExecuteResult as C, type EndpointDefinition as E, type GeneratorConfig as G, type HttpMethod as H, type ParameterLocation as P, type ResponseConfig as R, type ApiDefaults as a, type ApiInfo as b, ApiSchemaLoadError as c, type ApiSchemaVersion as d, type AuthConfig as e, AuthenticationError as f, type EndpointParameter as g, type ParameterType as h, buildUrl as i, generateInputSchema as j, generateToolDefinitions as k, getAuthConfig as l, getMethodAnnotations as m, loadApiSchema as n, loadApiSchemaFromString as o, registerEndpointTools as r };

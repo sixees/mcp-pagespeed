@@ -1,3 +1,23 @@
+// src/lib/config/environment.ts
+var ENV = {
+  /** Directory for saving response files */
+  OUTPUT_DIR: "MCP_CURL_OUTPUT_DIR",
+  /** Enable localhost requests for development */
+  ALLOW_LOCALHOST: "MCP_CURL_ALLOW_LOCALHOST",
+  /** Bearer token for HTTP transport authentication */
+  AUTH_TOKEN: "MCP_AUTH_TOKEN",
+  /** Comma-separated allowed origins for HTTP transport (default: localhost) */
+  ALLOWED_ORIGINS: "MCP_CURL_ALLOWED_ORIGINS",
+  /** HTTP transport bind address (default: 127.0.0.1) */
+  HOST: "MCP_CURL_HOST",
+  /** HTTP transport port (default: 3000) */
+  PORT: "PORT",
+  /** Override default User-Agent header (empty string disables) */
+  USER_AGENT: "MCP_CURL_USER_AGENT",
+  /** Override default Referer header (empty string disables) */
+  REFERER: "MCP_CURL_REFERER"
+};
+
 // src/lib/utils/url.ts
 import { z } from "zod";
 function resolveBaseUrl(baseUrl, path) {
@@ -18,46 +38,231 @@ function httpOnlyUrl(description) {
   ).describe(description);
 }
 
-// src/lib/server/schemas.ts
-import { z as z2 } from "zod";
-var CurlExecuteSchema = z2.object({
-  url: httpOnlyUrl("The URL to request"),
-  method: z2.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]).optional().describe("HTTP method (defaults to GET, or POST if data is provided)"),
-  headers: z2.record(z2.string(), z2.string()).optional().describe('HTTP headers as key-value pairs (e.g., {"Content-Type": "application/json"})'),
-  data: z2.string().optional().describe("Request body data (for POST/PUT/PATCH). Use JSON string for JSON payloads"),
-  form: z2.record(z2.string(), z2.string()).optional().describe("Form data as key-value pairs (uses multipart/form-data)"),
-  follow_redirects: z2.boolean().default(true).describe("Follow HTTP redirects (default: true)"),
-  max_redirects: z2.number().int().min(0).max(50).optional().describe("Maximum number of redirects to follow"),
-  insecure: z2.boolean().default(false).describe("Skip SSL certificate verification (default: false)"),
-  /**
-   * Request timeout in seconds.
-   * Optional - if not provided, defaults are applied in this order:
-   * 1. McpCurlConfig.defaultTimeout (if configured)
-   * 2. LIMITS.DEFAULT_TIMEOUT_MS / 1000 (30 seconds)
-   *
-   * Note: This field intentionally has no .default() to distinguish between
-   * "user explicitly passed 30" vs "user didn't provide a value".
-   */
-  timeout: z2.number().int().min(1).max(300).optional().describe("Request timeout in seconds (default: 30, max: 300)"),
-  user_agent: z2.string().optional().describe("Custom User-Agent header. If not set, a browser-like User-Agent is sent automatically. Set to empty string to disable."),
-  basic_auth: z2.string().optional().describe("Basic authentication in format 'username:password'"),
-  bearer_token: z2.string().optional().describe("Bearer token for Authorization header"),
-  verbose: z2.boolean().default(false).describe("Include verbose output with request/response details"),
-  include_headers: z2.boolean().default(false).describe("Include response headers in output"),
-  compressed: z2.boolean().default(true).describe("Request compressed response and automatically decompress"),
-  include_metadata: z2.boolean().default(false).describe("Wrap response in JSON with metadata (exit code, success status)"),
-  jq_filter: z2.string().optional().describe('JSON path filter to extract specific data. Supports: .key, .[n] or .n (non-negative array index), .[n:m] (slice), .["key"] (bracket notation), .a,.b (multiple comma-separated paths return array, max 20). Negative indices not supported. Applied after response, before max_result_size check.'),
-  max_result_size: z2.number().int().min(1e3).max(1e6).optional().describe("Max bytes to return inline (default: 500KB, max: 1MB). Larger responses auto-save to temp file"),
-  save_to_file: z2.boolean().optional().describe("Force save response to temp file. Returns filepath instead of content"),
-  output_dir: z2.string().optional().describe("Directory to save response files (must exist and be writable). Overrides MCP_CURL_OUTPUT_DIR env var. Falls back to system temp directory.")
-});
-var JqQuerySchema = z2.object({
-  filepath: z2.string().describe("Path to a JSON file to query. Must be in temp directory, MCP_CURL_OUTPUT_DIR, or current working directory."),
-  jq_filter: z2.string().describe('JSON path filter expression. Supports: .key, .[n] or .n (non-negative array index), .[n:m] (slice), .["key"] (bracket notation), .a,.b (multiple comma-separated paths return array, max 20). Negative indices not supported.'),
-  max_result_size: z2.number().int().min(1e3).max(1e6).optional().describe("Max bytes to return inline (default: 500KB, max: 1MB). Larger results auto-save to file"),
-  save_to_file: z2.boolean().optional().describe("Force save result to file. Returns filepath instead of content"),
-  output_dir: z2.string().optional().describe("Directory to save result files (must exist and be writable)")
-});
+// src/lib/utils/sanitize.ts
+var MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH = 1e3;
+var DESC_CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFE00-\uFE0F\u{E0000}-\u{E007F}]+/gu;
+var RESPONSE_SANITIZE_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFE00-\uFE0F\u{E0000}-\u{E007F}]+| {50,}/gu;
+var INJECTION_PATTERNS = new RegExp(
+  [
+    // Explicit instruction override
+    "ignore[\\s\\S]{0,20}(previous|prior|all|your|above|system)[\\s\\S]{0,20}instructions?",
+    "disregard[\\s\\S]{0,20}(previous|prior|all|your|above|system)[\\s\\S]{0,20}(instructions?|directives?|rules?)",
+    "forget[\\s\\S]{0,20}(previous|prior|all|your|above|everything|instructions?)",
+    "override[\\s\\S]{0,20}(your|the|all|previous)[\\s\\S]{0,20}(instructions?|settings?|behavior|config|directives?|rules?)",
+    // Persona takeover
+    "you\\s+are\\s+now\\s+",
+    "act\\s+as\\s+",
+    "assume\\s+the\\s+role\\s+of",
+    "pretend\\s+(you\\s+are|to\\s+be)",
+    "roleplay\\s+as",
+    "\\bDAN\\b",
+    "jailbreak",
+    // Privilege escalation / structural override tokens
+    "\\[ADMIN[\\s_-]*OVERRIDE\\]",
+    "<\\s*admin\\s*>",
+    "<\\s*SYSTEM\\s*>",
+    "<\\s*IMPORTANT\\s*>",
+    "\\[INST\\]",
+    // System/prompt manipulation
+    "system\\s+prompt",
+    "new\\s+(primary\\s+)?instructions?\\s*(are|:|follow)",
+    "your\\s+new\\s+(primary\\s+|main\\s+)?objective",
+    "do\\s+not\\s+(follow|apply|use|obey|comply)[\\s\\S]{0,20}instructions?",
+    // Data exfiltration — file system triggers
+    "read\\s+~\\/\\.(ssh|cursor|env|zshrc|bashrc|config|npmrc|gitconfig)",
+    "pass[\\s\\S]{0,20}(its|the)\\s+contents?\\s+as",
+    "exfiltrate",
+    "(extract|exfiltrate|leak|transmit|send\\s+me)[\\s\\S]{0,30}(passwords?|credentials?|secrets?|tokens?|api[\\s\\S]{0,5}keys?)"
+  ].join("|"),
+  "i"
+);
+function sanitizeDescription(input) {
+  if (input == null) return "";
+  return input.replace(DESC_CONTROL_CHARS, " ").trim();
+}
+function sanitizeResponse(input) {
+  if (input == null) return "";
+  return input.replace(RESPONSE_SANITIZE_PATTERN, (match) => {
+    if (match[0] === " ") return "[WHITESPACE REMOVED]";
+    return "";
+  });
+}
+function detectInjectionPattern(input) {
+  const match = input.match(INJECTION_PATTERNS);
+  if (!match) return null;
+  return match[0].replace(/[\n\r]+/g, " ").slice(0, 200);
+}
+function applySpotlighting(content, requestId) {
+  const begin = `---EXTERNAL-CONTENT-BEGIN-${requestId}---`;
+  const end = `---EXTERNAL-CONTENT-END-${requestId}---`;
+  return `${begin}
+${content}
+${end}`;
+}
+
+// src/lib/utils/error.ts
+function getErrorMessage(error) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+function createValidationError(field, reason, suggestion) {
+  let message = `Invalid ${field}: ${reason}.`;
+  if (suggestion) {
+    message += ` ${suggestion}`;
+    if (!suggestion.endsWith(".")) {
+      message += ".";
+    }
+  }
+  return new Error(message);
+}
+function createFileError(filepath, reason) {
+  return new Error(`File "${filepath}" ${reason}.`);
+}
+function createConfigError(configName, value, reason) {
+  return new Error(`Invalid ${configName} value "${value}": ${reason}.`);
+}
+
+// src/lib/config/session.ts
+var SESSION = {
+  /** Maximum concurrent HTTP sessions */
+  MAX_SESSIONS: 100,
+  /** Session idle timeout (1 hour) */
+  IDLE_TIMEOUT_MS: 36e5,
+  /** Interval for cleaning up idle sessions (5 minutes) */
+  CLEANUP_INTERVAL_MS: 3e5
+};
+var RATE_LIMIT = {
+  /** Maximum requests per host per minute */
+  MAX_PER_HOST_PER_MINUTE: 60,
+  /** Maximum requests per client per minute */
+  MAX_PER_CLIENT_PER_MINUTE: 300,
+  /** Rate limit window duration (1 minute) */
+  WINDOW_MS: 6e4,
+  /** Interval for cleaning up expired rate limit entries (10 seconds) */
+  CLEANUP_INTERVAL_MS: 1e4,
+  /** Client ID used for stdio transport */
+  STDIO_CLIENT_ID: "__stdio_client__"
+};
+var TEMP_DIR = {
+  /** Prefix for temp directories */
+  PREFIX: "mcp-curl-",
+  /** Minimum age before orphaned temp dirs are cleaned (1 hour) */
+  ORPHAN_MIN_AGE_MS: 36e5,
+  /** Backoff period before retrying temp directory creation after failure (1 second) */
+  RETRY_BACKOFF_MS: 1e3
+};
+
+// src/lib/security/rate-limiter.ts
+var hostRateLimitMap = /* @__PURE__ */ new Map();
+var clientRateLimitMap = /* @__PURE__ */ new Map();
+function cleanupExpiredEntries(map) {
+  const now = Date.now();
+  for (const [key, entry] of map) {
+    if (now - entry.windowStart >= RATE_LIMIT.WINDOW_MS) {
+      map.delete(key);
+    }
+  }
+}
+function checkRateLimitInternal(map, key, maxRequests, errorPrefix) {
+  const now = Date.now();
+  const entry = map.get(key);
+  if (!entry || now - entry.windowStart >= RATE_LIMIT.WINDOW_MS) {
+    map.set(key, { count: 1, windowStart: now });
+    return;
+  }
+  if (entry.count >= maxRequests) {
+    throw new Error(`${errorPrefix}. Maximum ${maxRequests} requests per minute.`);
+  }
+  entry.count++;
+}
+function checkRateLimits(hostname, clientId = RATE_LIMIT.STDIO_CLIENT_ID) {
+  checkRateLimitInternal(
+    hostRateLimitMap,
+    hostname,
+    RATE_LIMIT.MAX_PER_HOST_PER_MINUTE,
+    `Rate limit exceeded for host "${hostname}"`
+  );
+  checkRateLimitInternal(
+    clientRateLimitMap,
+    clientId,
+    RATE_LIMIT.MAX_PER_CLIENT_PER_MINUTE,
+    "Client rate limit exceeded"
+  );
+}
+function startRateLimitCleanup() {
+  const interval = setInterval(() => {
+    cleanupExpiredEntries(hostRateLimitMap);
+    cleanupExpiredEntries(clientRateLimitMap);
+  }, RATE_LIMIT.CLEANUP_INTERVAL_MS);
+  interval.unref();
+  return interval;
+}
+function stopRateLimitCleanup(interval) {
+  clearInterval(interval);
+}
+
+// src/lib/security/input-validation.ts
+import { timingSafeEqual } from "crypto";
+
+// src/lib/config/security/validation.ts
+var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+var WINDOWS_RESERVED_BASENAMES_SET = Object.freeze(
+  /* @__PURE__ */ new Set([
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9"
+  ])
+);
+var WINDOWS_RESERVED_BASENAMES = Object.freeze(
+  Array.from(WINDOWS_RESERVED_BASENAMES_SET)
+);
+function isWindowsReservedBasename(name) {
+  return WINDOWS_RESERVED_BASENAMES_SET.has(name.toUpperCase());
+}
+
+// src/lib/security/input-validation.ts
+function safeStringCompare(a, b) {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  const maxLen = Math.max(bufA.length, bufB.length);
+  const paddedA = Buffer.alloc(maxLen);
+  const paddedB = Buffer.alloc(maxLen);
+  bufA.copy(paddedA);
+  bufB.copy(paddedB);
+  const lengthMatch = bufA.length === bufB.length ? 1 : 0;
+  return timingSafeEqual(paddedA, paddedB) && lengthMatch === 1;
+}
+function isValidSessionId(sessionId) {
+  return sessionId !== void 0 && UUID_REGEX.test(sessionId);
+}
+function validateNoCRLF(value, fieldName) {
+  if (value.includes("\r") || value.includes("\n") || value.includes("\0")) {
+    throw new Error(
+      `Invalid ${fieldName}: contains forbidden characters (CR, LF, or null byte). This could enable header injection attacks.`
+    );
+  }
+}
 
 // src/lib/config/limits.ts
 var BYTES_PER_MB = 1e6;
@@ -101,72 +306,6 @@ var SERVER = {
   VERSION: true ? "3.1.1" : "0.0.0"
 };
 
-// src/lib/config/session.ts
-var SESSION = {
-  /** Maximum concurrent HTTP sessions */
-  MAX_SESSIONS: 100,
-  /** Session idle timeout (1 hour) */
-  IDLE_TIMEOUT_MS: 36e5,
-  /** Interval for cleaning up idle sessions (5 minutes) */
-  CLEANUP_INTERVAL_MS: 3e5
-};
-var RATE_LIMIT = {
-  /** Maximum requests per host per minute */
-  MAX_PER_HOST_PER_MINUTE: 60,
-  /** Maximum requests per client per minute */
-  MAX_PER_CLIENT_PER_MINUTE: 300,
-  /** Rate limit window duration (1 minute) */
-  WINDOW_MS: 6e4,
-  /** Interval for cleaning up expired rate limit entries (10 seconds) */
-  CLEANUP_INTERVAL_MS: 1e4,
-  /** Client ID used for stdio transport */
-  STDIO_CLIENT_ID: "__stdio_client__"
-};
-var TEMP_DIR = {
-  /** Prefix for temp directories */
-  PREFIX: "mcp-curl-",
-  /** Minimum age before orphaned temp dirs are cleaned (1 hour) */
-  ORPHAN_MIN_AGE_MS: 36e5,
-  /** Backoff period before retrying temp directory creation after failure (1 second) */
-  RETRY_BACKOFF_MS: 1e3
-};
-
-// src/lib/config/jq.ts
-var JQ = {
-  /** Maximum jq_filter string length */
-  MAX_FILTER_LENGTH: 500,
-  /** Maximum tokens in a single filter */
-  MAX_TOKENS: 50,
-  /** Maximum comma-separated filters */
-  MAX_FILTERS: 20,
-  /** Parsing timeout to prevent ReDoS (100ms) */
-  MAX_PARSE_TIME_MS: 100,
-  /** Maximum file size for jq_query tool (same as response limit) */
-  MAX_QUERY_FILE_SIZE: LIMITS.MAX_RESPONSE_SIZE,
-  /** TTL for allowed directories cache in file validation (1 minute) */
-  ALLOWED_DIRS_CACHE_TTL_MS: 6e4
-};
-
-// src/lib/config/environment.ts
-var ENV = {
-  /** Directory for saving response files */
-  OUTPUT_DIR: "MCP_CURL_OUTPUT_DIR",
-  /** Enable localhost requests for development */
-  ALLOW_LOCALHOST: "MCP_CURL_ALLOW_LOCALHOST",
-  /** Bearer token for HTTP transport authentication */
-  AUTH_TOKEN: "MCP_AUTH_TOKEN",
-  /** Comma-separated allowed origins for HTTP transport (default: localhost) */
-  ALLOWED_ORIGINS: "MCP_CURL_ALLOWED_ORIGINS",
-  /** HTTP transport bind address (default: 127.0.0.1) */
-  HOST: "MCP_CURL_HOST",
-  /** HTTP transport port (default: 3000) */
-  PORT: "PORT",
-  /** Override default User-Agent header (empty string disables) */
-  USER_AGENT: "MCP_CURL_USER_AGENT",
-  /** Override default Referer header (empty string disables) */
-  REFERER: "MCP_CURL_REFERER"
-};
-
 // src/lib/config/defaults.ts
 var DEFAULT_USER_AGENT = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 mcp-curl/${SERVER.VERSION}`;
 var DEFAULT_REFERER = "";
@@ -189,6 +328,22 @@ function applyDefaultHeaders(headers, userAgent, config) {
   }
   return { headers: result, userAgent: resolvedUA };
 }
+
+// src/lib/config/jq.ts
+var JQ = {
+  /** Maximum jq_filter string length */
+  MAX_FILTER_LENGTH: 500,
+  /** Maximum tokens in a single filter */
+  MAX_TOKENS: 50,
+  /** Maximum comma-separated filters */
+  MAX_FILTERS: 20,
+  /** Parsing timeout to prevent ReDoS (100ms) */
+  MAX_PARSE_TIME_MS: 100,
+  /** Maximum file size for jq_query tool (same as response limit) */
+  MAX_QUERY_FILE_SIZE: LIMITS.MAX_RESPONSE_SIZE,
+  /** TTL for allowed directories cache in file validation (1 minute) */
+  ALLOWED_DIRS_CACHE_TTL_MS: 6e4
+};
 
 // src/lib/config/security/ssrf.ts
 var BLOCKED_HOSTNAME_PATTERNS_INTERNAL = Object.freeze([
@@ -288,41 +443,6 @@ function isAllowedLocalhostPort(port) {
   return ALLOWED_LOCALHOST_PORTS_INTERNAL.has(port) || port > MIN_UNPRIVILEGED_PORT;
 }
 
-// src/lib/config/security/validation.ts
-var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-var WINDOWS_RESERVED_BASENAMES_SET = Object.freeze(
-  /* @__PURE__ */ new Set([
-    "CON",
-    "PRN",
-    "AUX",
-    "NUL",
-    "COM1",
-    "COM2",
-    "COM3",
-    "COM4",
-    "COM5",
-    "COM6",
-    "COM7",
-    "COM8",
-    "COM9",
-    "LPT1",
-    "LPT2",
-    "LPT3",
-    "LPT4",
-    "LPT5",
-    "LPT6",
-    "LPT7",
-    "LPT8",
-    "LPT9"
-  ])
-);
-var WINDOWS_RESERVED_BASENAMES = Object.freeze(
-  Array.from(WINDOWS_RESERVED_BASENAMES_SET)
-);
-function isWindowsReservedBasename(name) {
-  return WINDOWS_RESERVED_BASENAMES_SET.has(name.toUpperCase());
-}
-
 // src/lib/config/security/blocked-dirs.ts
 var LINUX_BLOCKED_DIRS = Object.freeze([
   "/etc",
@@ -405,14 +525,6 @@ function createBlockedDirectoryError(originalPath, resolvedPath) {
   return new Error(
     `Invalid output_dir ${pathInfo}: writing to system directories is not allowed. Please choose a user-writable directory like ~/downloads or a project directory.`
   );
-}
-
-// src/lib/types/common.ts
-import { randomUUID } from "crypto";
-function generateMetadataSeparator() {
-  return `
----MCP-CURL-${randomUUID()}---
-`;
 }
 
 // src/lib/files/temp-manager.ts
@@ -507,159 +619,37 @@ async function cleanupTempDir() {
   lastFailureTime = 0;
 }
 
-// src/lib/files/output-dir.ts
-import { resolve } from "path";
-import { stat as stat2, access, realpath, constants as fsConstants } from "fs/promises";
-
-// src/lib/utils/error.ts
-function getErrorMessage(error) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
+// src/lib/security/detection-logger.ts
+var THROTTLE_WINDOW_MS = 6e4;
+var lastDetectedMap = /* @__PURE__ */ new Map();
+function normalizeDetectionLabel(label) {
+  return label.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").slice(0, 128);
 }
-function createValidationError(field, reason, suggestion) {
-  let message = `Invalid ${field}: ${reason}.`;
-  if (suggestion) {
-    message += ` ${suggestion}`;
-    if (!suggestion.endsWith(".")) {
-      message += ".";
+function logInjectionDetected(hostname) {
+  const safeLabel = normalizeDetectionLabel(hostname);
+  const now = Date.now();
+  const lastSeen = lastDetectedMap.get(safeLabel);
+  if (lastSeen !== void 0 && now - lastSeen < THROTTLE_WINDOW_MS) {
+    return;
+  }
+  lastDetectedMap.set(safeLabel, now);
+  console.error(`[injection-defense] [${safeLabel}] InjectionDetected`);
+}
+function startInjectionCleanup() {
+  const interval = setInterval(cleanupInjectionDetectionMap, THROTTLE_WINDOW_MS);
+  interval.unref();
+  return interval;
+}
+function stopInjectionCleanup(interval) {
+  clearInterval(interval);
+}
+function cleanupInjectionDetectionMap() {
+  const now = Date.now();
+  for (const [key, timestamp] of lastDetectedMap) {
+    if (now - timestamp >= THROTTLE_WINDOW_MS) {
+      lastDetectedMap.delete(key);
     }
   }
-  return new Error(message);
-}
-function createFileError(filepath, reason) {
-  return new Error(`File "${filepath}" ${reason}.`);
-}
-function createConfigError(configName, value, reason) {
-  return new Error(`Invalid ${configName} value "${value}": ${reason}.`);
-}
-
-// src/lib/utils/sanitize.ts
-var MAX_CUSTOM_TOOL_DESCRIPTION_LENGTH = 1e3;
-var DESC_CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFE00-\uFE0F\u{E0000}-\u{E007F}]+/gu;
-var RESPONSE_SANITIZE_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFE00-\uFE0F\u{E0000}-\u{E007F}]+| {50,}/gu;
-var INJECTION_PATTERNS = new RegExp(
-  [
-    // Explicit instruction override
-    "ignore[\\s\\S]{0,20}(previous|prior|all|your|above|system)[\\s\\S]{0,20}instructions?",
-    "disregard[\\s\\S]{0,20}(previous|prior|all|your|above|system)[\\s\\S]{0,20}(instructions?|directives?|rules?)",
-    "forget[\\s\\S]{0,20}(previous|prior|all|your|above|everything|instructions?)",
-    "override[\\s\\S]{0,20}(your|the|all|previous)[\\s\\S]{0,20}(instructions?|settings?|behavior|config|directives?|rules?)",
-    // Persona takeover
-    "you\\s+are\\s+now\\s+",
-    "act\\s+as\\s+",
-    "assume\\s+the\\s+role\\s+of",
-    "pretend\\s+(you\\s+are|to\\s+be)",
-    "roleplay\\s+as",
-    "\\bDAN\\b",
-    "jailbreak",
-    // Privilege escalation / structural override tokens
-    "\\[ADMIN[\\s_-]*OVERRIDE\\]",
-    "<\\s*admin\\s*>",
-    "<\\s*SYSTEM\\s*>",
-    "<\\s*IMPORTANT\\s*>",
-    "\\[INST\\]",
-    // System/prompt manipulation
-    "system\\s+prompt",
-    "new\\s+(primary\\s+)?instructions?\\s*(are|:|follow)",
-    "your\\s+new\\s+(primary\\s+|main\\s+)?objective",
-    "do\\s+not\\s+(follow|apply|use|obey|comply)[\\s\\S]{0,20}instructions?",
-    // Data exfiltration — file system triggers
-    "read\\s+~\\/\\.(ssh|cursor|env|zshrc|bashrc|config|npmrc|gitconfig)",
-    "pass[\\s\\S]{0,20}(its|the)\\s+contents?\\s+as",
-    "exfiltrate",
-    "(extract|exfiltrate|leak|transmit|send\\s+me)[\\s\\S]{0,30}(passwords?|credentials?|secrets?|tokens?|api[\\s\\S]{0,5}keys?)"
-  ].join("|"),
-  "i"
-);
-function sanitizeDescription(input) {
-  if (input == null) return "";
-  return input.replace(DESC_CONTROL_CHARS, " ").trim();
-}
-function sanitizeResponse(input) {
-  if (input == null) return "";
-  return input.replace(RESPONSE_SANITIZE_PATTERN, (match) => {
-    if (match[0] === " ") return "[WHITESPACE REMOVED]";
-    return "";
-  });
-}
-function detectInjectionPattern(input) {
-  const match = input.match(INJECTION_PATTERNS);
-  if (!match) return null;
-  return match[0].replace(/[\n\r]+/g, " ").slice(0, 200);
-}
-function applySpotlighting(content, requestId) {
-  const begin = `---EXTERNAL-CONTENT-BEGIN-${requestId}---`;
-  const end = `---EXTERNAL-CONTENT-END-${requestId}---`;
-  return `${begin}
-${content}
-${end}`;
-}
-
-// src/lib/files/output-dir.ts
-function resolveOutputDir(paramDir) {
-  if (paramDir !== void 0) {
-    const trimmedParam = paramDir.trim();
-    if (!trimmedParam) {
-      throw new Error(
-        `Invalid output_dir: value is empty or whitespace-only. Remove it to use the environment variable or temp directory, or provide a valid path.`
-      );
-    }
-    return trimmedParam;
-  }
-  const rawEnvDir = process.env[ENV.OUTPUT_DIR];
-  if (rawEnvDir !== void 0) {
-    const envDir = rawEnvDir.trim();
-    if (!envDir) {
-      throw new Error(
-        `Environment variable ${ENV.OUTPUT_DIR} is set but empty or whitespace-only. Unset it or provide a valid directory path.`
-      );
-    }
-    return envDir;
-  }
-  return null;
-}
-async function validateOutputDir(dir) {
-  const segments = dir.split(/[/\\]/);
-  if (segments.includes("..")) {
-    throw new Error(
-      `Invalid output_dir: path traversal detected. Please provide a direct path without ".." components.`
-    );
-  }
-  const absolutePath = resolve(dir);
-  try {
-    const stats = await stat2(absolutePath);
-    if (!stats.isDirectory()) {
-      throw new Error(
-        `Invalid output_dir "${dir}": path exists but is not a directory`
-      );
-    }
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      throw new Error(
-        `Invalid output_dir "${dir}": directory does not exist. Please create it first or use a different path.`
-      );
-    }
-    throw new Error(`Error validating output_dir "${dir}": ${getErrorMessage(error)}`);
-  }
-  const realPath = await realpath(absolutePath);
-  if (isBlockedSystemDirectory(realPath)) {
-    throw createBlockedDirectoryError(dir, realPath);
-  }
-  try {
-    await access(realPath, fsConstants.W_OK);
-  } catch (error) {
-    const errno = error.code;
-    let reason = "directory is not writable";
-    if (errno === "EROFS") {
-      reason = "filesystem is mounted read-only";
-    } else if (errno === "EACCES") {
-      reason = "permission denied";
-    }
-    throw new Error(`Invalid output_dir "${dir}": ${reason}`);
-  }
-  return realPath;
 }
 
 // src/lib/security/ssrf.ts
@@ -726,88 +716,15 @@ async function validateUrlAndResolveDns(url, options) {
   return { hostname, port, resolvedIp };
 }
 
-// src/lib/security/rate-limiter.ts
-var hostRateLimitMap = /* @__PURE__ */ new Map();
-var clientRateLimitMap = /* @__PURE__ */ new Map();
-function cleanupExpiredEntries(map) {
-  const now = Date.now();
-  for (const [key, entry] of map) {
-    if (now - entry.windowStart >= RATE_LIMIT.WINDOW_MS) {
-      map.delete(key);
-    }
-  }
-}
-function checkRateLimitInternal(map, key, maxRequests, errorPrefix) {
-  const now = Date.now();
-  const entry = map.get(key);
-  if (!entry || now - entry.windowStart >= RATE_LIMIT.WINDOW_MS) {
-    map.set(key, { count: 1, windowStart: now });
-    return;
-  }
-  if (entry.count >= maxRequests) {
-    throw new Error(`${errorPrefix}. Maximum ${maxRequests} requests per minute.`);
-  }
-  entry.count++;
-}
-function checkRateLimits(hostname, clientId = RATE_LIMIT.STDIO_CLIENT_ID) {
-  checkRateLimitInternal(
-    hostRateLimitMap,
-    hostname,
-    RATE_LIMIT.MAX_PER_HOST_PER_MINUTE,
-    `Rate limit exceeded for host "${hostname}"`
-  );
-  checkRateLimitInternal(
-    clientRateLimitMap,
-    clientId,
-    RATE_LIMIT.MAX_PER_CLIENT_PER_MINUTE,
-    "Client rate limit exceeded"
-  );
-}
-function startRateLimitCleanup() {
-  const interval = setInterval(() => {
-    cleanupExpiredEntries(hostRateLimitMap);
-    cleanupExpiredEntries(clientRateLimitMap);
-  }, RATE_LIMIT.CLEANUP_INTERVAL_MS);
-  interval.unref();
-  return interval;
-}
-function stopRateLimitCleanup(interval) {
-  clearInterval(interval);
-}
-
-// src/lib/security/input-validation.ts
-import { timingSafeEqual } from "crypto";
-function safeStringCompare(a, b) {
-  const bufA = Buffer.from(a, "utf8");
-  const bufB = Buffer.from(b, "utf8");
-  const maxLen = Math.max(bufA.length, bufB.length);
-  const paddedA = Buffer.alloc(maxLen);
-  const paddedB = Buffer.alloc(maxLen);
-  bufA.copy(paddedA);
-  bufB.copy(paddedB);
-  const lengthMatch = bufA.length === bufB.length ? 1 : 0;
-  return timingSafeEqual(paddedA, paddedB) && lengthMatch === 1;
-}
-function isValidSessionId(sessionId) {
-  return sessionId !== void 0 && UUID_REGEX.test(sessionId);
-}
-function validateNoCRLF(value, fieldName) {
-  if (value.includes("\r") || value.includes("\n") || value.includes("\0")) {
-    throw new Error(
-      `Invalid ${fieldName}: contains forbidden characters (CR, LF, or null byte). This could enable header injection attacks.`
-    );
-  }
-}
-
 // src/lib/security/file-validation.ts
-import { resolve as resolve2, relative, isAbsolute } from "path";
-import { stat as stat3, access as access2, realpath as realpath2, constants as fsConstants2 } from "fs/promises";
+import { resolve, relative, isAbsolute } from "path";
+import { stat as stat2, access, realpath, constants as fsConstants } from "fs/promises";
 var allowedDirsCache = null;
 async function resolveSharedTempDirSafely() {
   const tempDir = getSharedTempDir();
   if (!tempDir) return null;
   try {
-    return await realpath2(tempDir);
+    return await realpath(tempDir);
   } catch (error) {
     const errno = error.code;
     if (errno !== "ENOENT") {
@@ -837,8 +754,8 @@ async function getAllowedDirectories() {
   const envOutputDir = process.env[ENV.OUTPUT_DIR];
   if (envOutputDir) {
     try {
-      const realEnvDir = await realpath2(resolve2(envOutputDir));
-      const envDirStats = await stat3(realEnvDir);
+      const realEnvDir = await realpath(resolve(envOutputDir));
+      const envDirStats = await stat2(realEnvDir);
       if (!envDirStats.isDirectory()) {
         throw createConfigError(ENV.OUTPUT_DIR, envOutputDir, "path exists but is not a directory");
       }
@@ -852,7 +769,7 @@ async function getAllowedDirectories() {
   }
   let cwdResolved;
   try {
-    cwdResolved = await realpath2(process.cwd());
+    cwdResolved = await realpath(process.cwd());
   } catch (error) {
     throw new Error(
       `Failed to resolve current working directory: ${getErrorMessage(error)}. This is required for secure file validation.`
@@ -882,11 +799,11 @@ async function validateFilePath(filepath) {
       "Please provide a direct path without '..' components"
     );
   }
-  const absolutePath = resolve2(filepath);
+  const absolutePath = resolve(filepath);
   let realFilePath;
   try {
-    realFilePath = await realpath2(absolutePath);
-    const stats = await stat3(realFilePath);
+    realFilePath = await realpath(absolutePath);
+    const stats = await stat2(realFilePath);
     if (!stats.isFile()) {
       throw new Error(`Invalid filepath "${filepath}": path exists but is not a file`);
     }
@@ -906,7 +823,7 @@ async function validateFilePath(filepath) {
     throw new Error(`Error validating file "${filepath}": ${getErrorMessage(error)}`);
   }
   try {
-    await access2(realFilePath, fsConstants2.R_OK);
+    await access(realFilePath, fsConstants.R_OK);
   } catch (error) {
     const errno = error.code;
     throw createFileError(filepath, `is not readable (${errno || "unknown error"})`);
@@ -924,37 +841,120 @@ async function validateFilePath(filepath) {
   return realFilePath;
 }
 
-// src/lib/security/detection-logger.ts
-var THROTTLE_WINDOW_MS = 6e4;
-var lastDetectedMap = /* @__PURE__ */ new Map();
-function normalizeDetectionLabel(label) {
-  return label.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").slice(0, 128);
-}
-function logInjectionDetected(hostname) {
-  const safeLabel = normalizeDetectionLabel(hostname);
-  const now = Date.now();
-  const lastSeen = lastDetectedMap.get(safeLabel);
-  if (lastSeen !== void 0 && now - lastSeen < THROTTLE_WINDOW_MS) {
-    return;
-  }
-  lastDetectedMap.set(safeLabel, now);
-  console.error(`[injection-defense] [${safeLabel}] InjectionDetected`);
-}
-function startInjectionCleanup() {
-  const interval = setInterval(cleanupInjectionDetectionMap, THROTTLE_WINDOW_MS);
-  interval.unref();
-  return interval;
-}
-function stopInjectionCleanup(interval) {
-  clearInterval(interval);
-}
-function cleanupInjectionDetectionMap() {
-  const now = Date.now();
-  for (const [key, timestamp] of lastDetectedMap) {
-    if (now - timestamp >= THROTTLE_WINDOW_MS) {
-      lastDetectedMap.delete(key);
+// src/lib/files/output-dir.ts
+import { resolve as resolve2 } from "path";
+import { stat as stat3, access as access2, realpath as realpath2, constants as fsConstants2 } from "fs/promises";
+function resolveOutputDir(paramDir) {
+  if (paramDir !== void 0) {
+    const trimmedParam = paramDir.trim();
+    if (!trimmedParam) {
+      throw new Error(
+        `Invalid output_dir: value is empty or whitespace-only. Remove it to use the environment variable or temp directory, or provide a valid path.`
+      );
     }
+    return trimmedParam;
   }
+  const rawEnvDir = process.env[ENV.OUTPUT_DIR];
+  if (rawEnvDir !== void 0) {
+    const envDir = rawEnvDir.trim();
+    if (!envDir) {
+      throw new Error(
+        `Environment variable ${ENV.OUTPUT_DIR} is set but empty or whitespace-only. Unset it or provide a valid directory path.`
+      );
+    }
+    return envDir;
+  }
+  return null;
+}
+async function validateOutputDir(dir) {
+  const segments = dir.split(/[/\\]/);
+  if (segments.includes("..")) {
+    throw new Error(
+      `Invalid output_dir: path traversal detected. Please provide a direct path without ".." components.`
+    );
+  }
+  const absolutePath = resolve2(dir);
+  try {
+    const stats = await stat3(absolutePath);
+    if (!stats.isDirectory()) {
+      throw new Error(
+        `Invalid output_dir "${dir}": path exists but is not a directory`
+      );
+    }
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new Error(
+        `Invalid output_dir "${dir}": directory does not exist. Please create it first or use a different path.`
+      );
+    }
+    throw new Error(`Error validating output_dir "${dir}": ${getErrorMessage(error)}`);
+  }
+  const realPath = await realpath2(absolutePath);
+  if (isBlockedSystemDirectory(realPath)) {
+    throw createBlockedDirectoryError(dir, realPath);
+  }
+  try {
+    await access2(realPath, fsConstants2.W_OK);
+  } catch (error) {
+    const errno = error.code;
+    let reason = "directory is not writable";
+    if (errno === "EROFS") {
+      reason = "filesystem is mounted read-only";
+    } else if (errno === "EACCES") {
+      reason = "permission denied";
+    }
+    throw new Error(`Invalid output_dir "${dir}": ${reason}`);
+  }
+  return realPath;
+}
+
+// src/lib/server/schemas.ts
+import { z as z2 } from "zod";
+var CurlExecuteSchema = z2.object({
+  url: httpOnlyUrl("The URL to request"),
+  method: z2.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]).optional().describe("HTTP method (defaults to GET, or POST if data is provided)"),
+  headers: z2.record(z2.string(), z2.string()).optional().describe('HTTP headers as key-value pairs (e.g., {"Content-Type": "application/json"})'),
+  data: z2.string().optional().describe("Request body data (for POST/PUT/PATCH). Use JSON string for JSON payloads"),
+  form: z2.record(z2.string(), z2.string()).optional().describe("Form data as key-value pairs (uses multipart/form-data)"),
+  follow_redirects: z2.boolean().default(true).describe("Follow HTTP redirects (default: true)"),
+  max_redirects: z2.number().int().min(0).max(50).optional().describe("Maximum number of redirects to follow"),
+  insecure: z2.boolean().default(false).describe("Skip SSL certificate verification (default: false)"),
+  /**
+   * Request timeout in seconds.
+   * Optional - if not provided, defaults are applied in this order:
+   * 1. McpCurlConfig.defaultTimeout (if configured)
+   * 2. LIMITS.DEFAULT_TIMEOUT_MS / 1000 (30 seconds)
+   *
+   * Note: This field intentionally has no .default() to distinguish between
+   * "user explicitly passed 30" vs "user didn't provide a value".
+   */
+  timeout: z2.number().int().min(1).max(300).optional().describe("Request timeout in seconds (default: 30, max: 300)"),
+  user_agent: z2.string().optional().describe("Custom User-Agent header. If not set, a browser-like User-Agent is sent automatically. Set to empty string to disable."),
+  basic_auth: z2.string().optional().describe("Basic authentication in format 'username:password'"),
+  bearer_token: z2.string().optional().describe("Bearer token for Authorization header"),
+  verbose: z2.boolean().default(false).describe("Include verbose output with request/response details"),
+  include_headers: z2.boolean().default(false).describe("Include response headers in output"),
+  compressed: z2.boolean().default(true).describe("Request compressed response and automatically decompress"),
+  include_metadata: z2.boolean().default(false).describe("Wrap response in JSON with metadata (exit code, success status)"),
+  jq_filter: z2.string().optional().describe('JSON path filter to extract specific data. Supports: .key, .[n] or .n (non-negative array index), .[n:m] (slice), .["key"] (bracket notation), .a,.b (multiple comma-separated paths return array, max 20). Negative indices not supported. Applied after response, before max_result_size check.'),
+  max_result_size: z2.number().int().min(1e3).max(1e6).optional().describe("Max bytes to return inline (default: 500KB, max: 1MB). Larger responses auto-save to temp file"),
+  save_to_file: z2.boolean().optional().describe("Force save response to temp file. Returns filepath instead of content"),
+  output_dir: z2.string().optional().describe("Directory to save response files (must exist and be writable). Overrides MCP_CURL_OUTPUT_DIR env var. Falls back to system temp directory.")
+});
+var JqQuerySchema = z2.object({
+  filepath: z2.string().describe("Path to a JSON file to query. Must be in temp directory, MCP_CURL_OUTPUT_DIR, or current working directory."),
+  jq_filter: z2.string().describe('JSON path filter expression. Supports: .key, .[n] or .n (non-negative array index), .[n:m] (slice), .["key"] (bracket notation), .a,.b (multiple comma-separated paths return array, max 20). Negative indices not supported.'),
+  max_result_size: z2.number().int().min(1e3).max(1e6).optional().describe("Max bytes to return inline (default: 500KB, max: 1MB). Larger results auto-save to file"),
+  save_to_file: z2.boolean().optional().describe("Force save result to file. Returns filepath instead of content"),
+  output_dir: z2.string().optional().describe("Directory to save result files (must exist and be writable)")
+});
+
+// src/lib/types/common.ts
+import { randomUUID } from "crypto";
+function generateMetadataSeparator() {
+  return `
+---MCP-CURL-${randomUUID()}---
+`;
 }
 
 // src/lib/execution/command-executor.ts
@@ -1904,7 +1904,6 @@ export {
   stopInjectionCleanup,
   resolveOutputDir,
   validateOutputDir,
-  CurlExecuteSchema,
   JqQuerySchema,
   createSafeFilenameBase,
   applyJqFilter,

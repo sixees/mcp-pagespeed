@@ -267,17 +267,52 @@ commit produced the same number. After review fixes: **495 passing**, 7 skipped.
 <!-- Created during code review — see docs/todos/ for full content -->
 | File | Priority | Description | Source |
 |------|----------|-------------|--------|
-| `docs/todos/001-pending-p2-trim-barrel-surface.md` | P2 | Trim `src/lib/index.ts` + `src/lib.ts` barrels to actual consumer needs | code-review |
-| `docs/todos/002-pending-p2-narrow-package-files-glob.md` | P2 | Narrow `package.json#files` to exclude `docs/plans` and `docs/work` | code-review |
-| `docs/todos/003-pending-p2-rebrand-internal-symbols.md` | P2 | Rebrand internal `mcp-curl`-named symbols (class, file, UA, session prefix) | code-review |
+| `docs/todos/001-complete-p2-trim-barrel-surface.md` | P2 | ✅ Trim `src/lib.ts` barrel + delete `src/lib/index.ts` | code-review |
+| `docs/todos/002-complete-p2-narrow-package-files-glob.md` | P2 | ✅ Narrow `package.json#files` to allow-list | code-review |
+| `docs/todos/003-complete-p2-rebrand-internal-symbols.md` | P2 | ✅ Add `PageSpeedServer` type alias (Option A); class/UA rename deferred | code-review |
 | `docs/todos/004-pending-p3-audit-coderabbit-yaml.md` | P3 | Actually audit `.coderabbit.yaml` (claimed but not done) | code-review |
 | `docs/todos/005-pending-p3-replace-bug-report-template.md` | P3 | Replace web-app `bug_report.md` template | code-review |
 | `docs/todos/006-pending-p3-gitignore-dist.md` | P3 | Gitignore `dist/`, rebuild on release | code-review |
 | `docs/todos/007-pending-p3-zod-api-response-schema.md` | P3 | Replace `Record<string, any>` API response with narrow Zod schema | code-review |
 
 ### Blockers
-**None — clear to merge.** All P1 findings fixed in this review pass. P2/P3
-items are tracked as todos for follow-up PRs.
+**None — clear to merge.** All P1 findings fixed in this review pass. All
+three P2 items addressed in the second pass below. Remaining P3 items
+tracked as todos for follow-up PRs.
+
+## P2 Cleanup Pass — 2026-05-01
+
+Second pass on PR #3 — addresses the three P2 review findings (#001, #002, #003).
+
+### Changes
+- **#002 (architecture, packaging):** `package.json#files` switched from `["dist","docs"]` to an
+  explicit allow-list. `npm pack --dry-run` confirms `docs/plans/`, `docs/work/`, and `docs/todos/`
+  no longer ship.
+- **#003 (architecture, naming) Option A:** Added `PageSpeedServer` as a value+type alias for
+  `McpCurlServer` from `"mcp-pagespeed"`. `configs/pagespeed.ts` now reads
+  `new PageSpeedServer()`. `User-Agent` constant in `src/lib/config/defaults.ts` annotated with
+  the rate-limiter rationale for keeping `mcp-curl/${VERSION}`. File/class/session-prefix rename
+  (Options B/C) intentionally deferred — captured as latent debt in the completed todo.
+- **#001 (architecture, simplicity, spr-dry):** `src/lib.ts` trimmed from a broad public-API
+  surface (~14 named symbols + ~9 type aliases) to the 6 symbols `configs/pagespeed.ts` actually
+  imports. `src/lib/index.ts` deleted (no in-tree consumer); `lib/index` removed from
+  `tsup.config.ts`; `./lib` removed from `package.json#exports`; `configs/self-import.test.ts`
+  updated to assert 3 subpaths instead of 4. `dist/lib.js` shrank from 921 B → 301 B.
+
+### Quality gate (post-P2)
+- `npm test` — **495 passing**, 7 skipped
+- `npm run typecheck` — clean
+- `npm run build` — clean
+
+### Files touched in P2 pass
+- `package.json` — narrow `files` allow-list; remove `./lib` from `#exports`
+- `src/lib.ts` — trimmed to consumer-needed re-exports + `PageSpeedServer` alias
+- `src/lib/index.ts` — **deleted** (unused barrel)
+- `src/lib/config/defaults.ts` — User-Agent annotated with rate-limiter rationale
+- `tsup.config.ts` — drop `lib/index` entry
+- `configs/pagespeed.ts` — switch to `PageSpeedServer` import + instantiation
+- `configs/self-import.test.ts` — update expected `#exports` keys
+- `docs/todos/001..003-pending-*.md` → `001..003-complete-*.md` — record Work Log, mark complete
 
 ### Files modified during review
 - `CLAUDE.md` — fix stale `"mcp-curl"` import string

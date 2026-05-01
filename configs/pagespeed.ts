@@ -18,7 +18,7 @@ import { dirname, join } from "path";
 // (`src/lib/`) via package.json#name + #exports. There is no external
 // `mcp-pagespeed` package dependency.
 import {
-  McpCurlServer,
+  PageSpeedServer,
   loadApiSchema,
   generateInputSchema,
   getAuthConfig,
@@ -52,7 +52,7 @@ try {
   const inputSchema = generateInputSchema(endpoint);
 
   // Create and configure server from schema
-  const server = new McpCurlServer()
+  const server = new PageSpeedServer()
     .configure({
       baseUrl: schema.api.baseUrl,
       defaultTimeout: schema.defaults?.timeout,

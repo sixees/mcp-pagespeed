@@ -1,10 +1,14 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: 002
 tags: [code-review, architecture, packaging]
 dependencies: []
 ---
+
+## Work Log
+
+**2026-05-01** — Option A (allow-list) applied on PR #3. `package.json#files` is now `["dist", "docs/README.md", "docs/api-schema.md", "docs/configuration.md", "docs/getting-started.md", "docs/internal"]`. `npm pack --dry-run` confirms `docs/plans/`, `docs/work/`, `docs/todos/` no longer ship in the tarball.
 
 # Narrow `package.json#files` to exclude `docs/plans` and `docs/work`
 

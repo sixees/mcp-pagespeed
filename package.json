@@ -15,10 +15,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./lib": {
-      "types": "./dist/lib/index.d.ts",
-      "import": "./dist/lib/index.js"
-    },
     "./schema": {
       "types": "./dist/lib/schema/index.d.ts",
       "import": "./dist/lib/schema/index.js"
@@ -29,7 +25,11 @@
   },
   "files": [
     "dist",
-    "docs"
+    "docs/README.md",
+    "docs/api-schema.md",
+    "docs/configuration.md",
+    "docs/getting-started.md",
+    "docs/internal"
   ],
   "repository": {
     "type": "git",

@@ -1,5 +1,5 @@
-import { b as ApiSchema } from '../../generator-Ctr639v0.js';
-export { A as ApiDefaults, a as ApiInfo, c as ApiSchemaVersion, d as AuthConfig, e as AuthenticationError, E as EndpointDefinition, f as EndpointParameter, G as GeneratorConfig, H as HttpMethod, P as ParameterLocation, g as ParameterType, R as ResponseConfig, h as buildUrl, i as generateInputSchema, j as generateToolDefinitions, k as getAuthConfig, p as getMethodAnnotations, r as registerEndpointTools } from '../../generator-Ctr639v0.js';
+import { A as ApiSchema } from '../../generator-kKl-WuXG.js';
+export { a as ApiDefaults, b as ApiInfo, c as ApiSchemaLoadError, d as ApiSchemaVersion, e as AuthConfig, f as AuthenticationError, E as EndpointDefinition, g as EndpointParameter, G as GeneratorConfig, H as HttpMethod, P as ParameterLocation, h as ParameterType, R as ResponseConfig, i as buildUrl, j as generateInputSchema, k as generateToolDefinitions, l as getAuthConfig, m as getMethodAnnotations, n as loadApiSchema, o as loadApiSchemaFromString, r as registerEndpointTools } from '../../generator-kKl-WuXG.js';
 import { ZodIssue, z } from 'zod';
 import '@modelcontextprotocol/sdk/server/mcp.js';
 
@@ -94,35 +94,4 @@ declare class ApiSchemaValidationError extends Error {
  */
 declare function validateApiSchema(data: unknown): ApiSchema;
 
-/**
- * Error thrown when loading an API schema fails.
- */
-declare class ApiSchemaLoadError extends Error {
-    readonly cause?: Error | undefined;
-    constructor(message: string, cause?: Error | undefined);
-}
-/**
- * Load and validate an API schema from a YAML file.
- *
- * SECURITY: This function reads from the filesystem. Ensure definitionPath
- * comes from a trusted source (not user input) to prevent path traversal attacks.
- * Path validation should be performed at the application boundary (CLI, HTTP handler).
- *
- * @param definitionPath - Path to the YAML definition file
- * @returns Validated ApiSchema
- * @throws ApiSchemaLoadError if file cannot be read or parsed
- * @throws ApiSchemaValidationError if schema validation fails
- */
-declare function loadApiSchema(definitionPath: string): Promise<ApiSchema>;
-/**
- * Load and validate an API schema from a YAML string.
- * Useful for testing or inline schema definitions.
- *
- * @param yamlContent - YAML content as a string
- * @returns Validated ApiSchema
- * @throws ApiSchemaLoadError if YAML parsing fails
- * @throws ApiSchemaValidationError if schema validation fails
- */
-declare function loadApiSchemaFromString(yamlContent: string): ApiSchema;
-
-export { ApiSchema, ApiSchemaLoadError, ApiSchemaValidationError, ApiSchemaValidator, loadApiSchema, loadApiSchemaFromString, validateApiSchema };
+export { ApiSchema, ApiSchemaValidationError, ApiSchemaValidator, validateApiSchema };

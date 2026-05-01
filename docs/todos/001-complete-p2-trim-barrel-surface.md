@@ -1,10 +1,19 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: 001
 tags: [code-review, architecture, simplicity, spr-dry]
 dependencies: []
 ---
+
+## Work Log
+
+**2026-05-01** — Option A applied on PR #3.
+- `src/lib.ts` trimmed from 14 named symbols + 9 type aliases → 4 values + 2 types (+ `PageSpeedServer` alias).
+- `src/lib/index.ts` deleted (no in-tree consumer); `lib/index` removed from `tsup.config.ts`; `./lib` removed from `package.json#exports`.
+- `configs/self-import.test.ts` updated to assert 3 subpaths (`.`, `./cli`, `./schema`).
+- `dist/lib.js`: 921 B → 301 B; eager imports of `executeCurlRequest` / `createServer` / `registerAll*` no longer present.
+- 495 tests pass, typecheck + build clean.
 
 # Trim `src/lib/index.ts` barrel surface to actual consumer needs
 

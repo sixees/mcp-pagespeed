@@ -1,10 +1,16 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: 003
 tags: [code-review, architecture, naming, technical-debt]
 dependencies: []
 ---
+
+## Work Log
+
+**2026-05-01** — Option A (type alias only) applied on PR #3. `configs/pagespeed.ts` now imports `PageSpeedServer` and instantiates it; the underlying class is still `McpCurlServer`, re-exported under both names from `src/lib.ts`. `User-Agent` constant in `src/lib/config/defaults.ts` annotated with the rate-limiter rationale for keeping the `mcp-curl/${VERSION}` token.
+
+**Deferred (Option B/C):** physical file/class rename (`mcp-curl-server.ts` → `server.ts`, `class McpCurlServer` → `class PageSpeedServer`), session prefix rename (`"mcp-curl-"` → `"mcp-pagespeed-"`), and the User-Agent rebrand (only after measuring against the live PageSpeed API rate-limiter). These remain as latent debt; file a fresh todo when the appetite exists.
 
 # Rebrand internal `mcp-curl`-named symbols
 

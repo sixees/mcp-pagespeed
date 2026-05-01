@@ -4,6 +4,12 @@
 import { SERVER } from "./server.js";
 import { ENV } from "./environment.js";
 
+// Intentionally pinned to `mcp-curl/${VERSION}` even after the package was
+// renamed to `mcp-pagespeed`. The Google PageSpeed API rate-limiter has been
+// observed to fingerprint by User-Agent; changing the UA token carries
+// behavioural risk (rate-limit budget reset / stricter throttling) that
+// outweighs the cosmetic win of brand alignment. Rebrand only after measuring
+// against the live API. See docs/todos/003-pending-p2-rebrand-internal-symbols.md.
 export const DEFAULT_USER_AGENT =
     `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 mcp-curl/${SERVER.VERSION}`;
 

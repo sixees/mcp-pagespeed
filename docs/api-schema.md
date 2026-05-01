@@ -121,7 +121,7 @@ Each endpoint entry drives `generateInputSchema()`. For `analyze_pagespeed` the 
 |---|---|
 | `id` | Tool name — must match the name passed to `registerCustomTool()` |
 | `path` | URL path appended to `api.baseUrl` |
-| `method` | HTTP method (used by `getMethodAnnotations()` for the tool annotations) |
+| `method` | HTTP method. Informational for `analyze_pagespeed` — the entry script hardcodes `getMethodAnnotations("GET")` rather than reading `endpoint.method`. |
 | `title` | Tool title, surfaced to the MCP client |
 | `description` | Used as the base of the tool description shown to the LLM (the entry script appends filter-preset and trust-boundary text) |
 | `parameters` | Drives the generated Zod schema's input fields |
@@ -203,7 +203,7 @@ const inputSchema = generateInputSchema(endpoint);
 const { queryParams } = getAuthConfig(schema.auth);
 // Produces: { key: process.env.PAGESPEED_API_KEY } (if set)
 
-// 4. Method annotations from the YAML method
+// 4. Method annotations — hardcoded "GET", not derived from endpoint.method
 const annotations = getMethodAnnotations("GET");
 
 // 5. Custom handler — NOT generated from YAML

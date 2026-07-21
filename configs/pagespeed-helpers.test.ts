@@ -165,6 +165,7 @@ describe("extractMetrics", () => {
         },
         "total-blocking-time": { numericValue: 100, displayValue: "100 ms" },
         interactive: { numericValue: 3000, displayValue: "3.0 s" },
+        "speed-index": { numericValue: 4200, displayValue: "4.2 s" },
       },
     };
     expect(extractMetrics(lh)).toEqual({
@@ -173,6 +174,7 @@ describe("extractMetrics", () => {
       cls: { value: 0.05, display: "0.05" },
       tbt: { value: 100, display: "100 ms" },
       tti: { value: 3000, display: "3.0 s" },
+      si: { value: 4200, display: "4.2 s" },
     });
   });
 

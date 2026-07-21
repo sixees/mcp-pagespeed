@@ -114,6 +114,7 @@ export function extractMetrics(lighthouse: Record<string, any>) {
     cls: get("cumulative-layout-shift"),
     tbt: get("total-blocking-time"),
     tti: get("interactive"),
+    si: get("speed-index"),
   };
 }
 
